@@ -1014,7 +1014,10 @@ def system_device_drivers(apt_cache=None, sys_path=None, freeonly=False):
 def get_desktop_package_list(
         apt_cache, sys_path=None, free_only=False, include_oem=True,
         driver_string='', include_dkms=False, recommended=False):
-    '''Return the list of packages that should be installed'''
+    '''Get the list of packages that should be installed to get working drivers
+    on the system'''
+
+    # Get the list of packages to install
     packages = system_driver_packages(
         apt_cache, sys_path, freeonly=free_only,
         include_oem=include_oem)
@@ -1146,7 +1149,7 @@ def gpgpu_install_filter(packages, drivers_str, get_recommended=True):
     ubuntu-drivers autoinstall --gpgpu [[driver:]version]
     ubuntu-drivers autoinstall --gpgpu driver[:version][,driver[:version]]
 
-    If no version is specified, gives the “current” supported version for the GPU in question.
+    If no version is specified, gives the "current" supported version for the GPU in question.
 
     Examples:
     ubuntu-drivers autoinstall --gpgpu
@@ -1640,7 +1643,8 @@ def get_linux_modules_metapackage(apt_cache, candidate):
         # skip foreign architectures, we usually only want native
         package_candidate = depcache.get_candidate_ver(package)
 
-        if (package_candidate and package_candidate.arch in ('all', get_apt_arch())):
+        if (package_candidate and
+                package_candidate.arch in ('all', get_apt_arch())):
             linux_version = get_linux_version(apt_cache)
             linux_modules_abi_candidate = 'linux-modules-nvidia-%s-%s' % (candidate_flavour, linux_version)
             logging.debug('linux_modules_abi_candidate: %s' % (linux_modules_abi_candidate))

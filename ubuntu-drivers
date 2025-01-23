@@ -20,6 +20,7 @@ import apt_pkg
 
 from functools import cmp_to_key
 import UbuntuDrivers.detect
+from UbuntuDrivers import kerneldetection
 
 sys_path = os.environ.get('UBUNTU_DRIVERS_SYS_DIR')
 
@@ -29,7 +30,7 @@ if not os.environ.get('PATH'):
     os.environ['PATH'] = '/sbin:/usr/sbin:/bin:/usr/bin'
 
 logger = logging.getLogger()
-logger.setLevel(logging.WARNING)
+logger.setLevel(logging.ERROR)
 
 CONTEXT_SETTINGS = dict(help_option_names=['-h', '--help'])
 
@@ -172,6 +173,18 @@ def command_install(args):
 
     with_nvidia_kms = False
     is_nvidia = False
+
+
+    # First check if kernel needs updating
+    kernel_detector = kerneldetection.KernelDetection(cache)
+
+    (kernel_message, should_exit) = kernel_detector.get_kernel_update_warning()
+
+    if kernel_message:
+        print(kernel_message)
+        if should_exit:
+            return 1
+
 
     to_install = UbuntuDrivers.detect.get_desktop_package_list(cache, sys_path,
         free_only=args.free_only, include_oem=args.install_oem_meta,
