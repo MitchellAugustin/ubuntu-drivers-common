@@ -24,7 +24,7 @@ import apt_pkg
 import logging
 import re
 
-from subprocess import Popen
+from subprocess import Popen, PIPE
 import os
 
 
@@ -256,19 +256,59 @@ class KernelDetection(object):
         '''Get a warning message if the kernel needs updating.
 
         Returns:
-            should_exit: True if we should exit (e.g., when DKMS is required but not enabled)
+            should_exit: True if the caller should exit (e.g. DKMS required but not included)
         '''
         is_outdated, running, latest, requires_dkms = self.is_running_kernel_outdated()
 
-        if requires_dkms and not include_dkms:
-            print("Your running kernel (%s) requires DKMS modules, which will NOT work with secure boot. "
-                  "Please use --include-dkms if you do not have secure boot enabled and want to proceed." % running)
-            return True
+        if requires_dkms:
+            if not include_dkms:
+                # Check Secure Boot state using mokutil
+                try:
+                    process = Popen(['mokutil', '--sb-state'], stdout=PIPE, stderr=PIPE)
+                    output, err = process.communicate()
+                    output = output.decode('utf-8').lower() 
+                    err = err.decode('utf-8').lower()
+                    if 'secureboot enabled' in output or 'secure boot enabled' in output:
+                        print(
+                            "Your running kernel (%s) requires DKMS modules, and you have Secure Boot enabled. "
+                            "To proceed, ensure you have access to your machine’s UEFI menu and have the rights to enroll a Machine Owner Key (MOK), "
+                            "then re-run ubuntu-drivers with --include-dkms. This will install the DKMS modules, then prompt you to enroll the new MOK and reboot."
+                            % running
+                        )
+                        return True
+                    elif 'secureboot disabled' in output or 'secure boot disabled' in output:
+                        print(
+                            "Your running kernel (%s) requires DKMS modules. You have Secure Boot disabled, but if you enable it in the future, you will need to sign or reinstall these DKMS modules for them to work. "
+                            "If you would like to continue, please re-run ubuntu-drivers with --include-dkms."
+                            % running
+                        )
+                        return True
+                    elif 'this system doesn\'t support secure boot' in err:
+                        print(
+                            "Your running kernel (%s) requires DKMS modules. Please use --include-dkms if you want to proceed."
+                            % running
+                        )
+                        return True
+                    # else: fall through to generic response
+                except Exception as e:
+                    logging.warning('Could not determine Secure Boot state: %s', str(e))
+                    # fall through to generic response
+
+                # fallback generic response - n
+                print(
+                    "Your running kernel (%s) requires DKMS modules, and ubuntu-drivers was unable to determine if Secure Boot is enabled. If you have SB enabled, you will need to enroll a MOK to proceed, which will require access to your UEFI menu and administrative privileges. Please use --include-dkms if you want to proceed."
+                    % running
+                )
+                return True
+            else:
+                # DKMS is allowed via --include-dkms, so no exit needed
+                return False
 
         if is_outdated and latest:
-            print(f"Warning: Your running kernel ({running}) is outdated. "
-                  f"A newer kernel ({latest}) is available in the Ubuntu archives. "
-                  f"Please run 'sudo apt update && sudo apt upgrade' to update your system.")
-            return False
-
+            print(
+                f"Warning: Your running kernel ({running}) is outdated. "
+                f"A newer kernel ({latest}) is available in the Ubuntu archives. "
+                f"Please run 'sudo apt update && sudo apt upgrade' to update your system."
+            )
+        # Outdated kernel is only a warning, not a blocker
         return False
