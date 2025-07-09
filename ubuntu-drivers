@@ -461,7 +461,7 @@ def install(config, **kwargs):
     '''Install a driver [driver[:version][,driver[:version]]]'''
 
     # Require user to be root or use a fake archive (for tests)
-    if os.geteuid() != 0 and not os.environ["FAKEARCHIVE"]:
+    if os.geteuid() != 0 and not "FAKEARCHIVE" in os.environ:
         print("Error: 'ubuntu-drivers install' must be run as root. Try using 'sudo'.", file=sys.stderr)
         sys.exit(1)
 
@@ -496,7 +496,7 @@ def autoinstall(config, **kwargs):
     #print('install, {0}'.format(kwargs['driver']))
 
     # Require user to be root or use a fake archive (for tests)
-    if os.geteuid() != 0 and not os.environ["FAKEARCHIVE"]:
+    if os.geteuid() != 0 and not "FAKEARCHIVE" in os.environ:
         print("Error: 'ubuntu-drivers autoinstall' must be run as root. Try using 'sudo'.", file=sys.stderr)
         sys.exit(1)
 
