@@ -266,26 +266,31 @@ class KernelDetection(object):
                 try:
                     process = Popen(['mokutil', '--sb-state'], stdout=PIPE, stderr=PIPE)
                     output, err = process.communicate()
-                    output = output.decode('utf-8').lower() 
+                    output = output.decode('utf-8').lower()
                     err = err.decode('utf-8').lower()
                     if 'secureboot enabled' in output or 'secure boot enabled' in output:
                         print(
                             "Your running kernel (%s) requires DKMS modules, and you have Secure Boot enabled. "
-                            "To proceed, ensure you have access to your machine’s UEFI menu and have the rights to enroll a Machine Owner Key (MOK), "
-                            "then re-run ubuntu-drivers with --include-dkms. This will install the DKMS modules, then prompt you to enroll the new MOK and reboot."
+                            "To proceed, ensure you have access to your machine’s UEFI menu and have the rights "
+                            "to enroll a Machine Owner Key (MOK), "
+                            "then re-run ubuntu-drivers with --include-dkms. This will install the DKMS modules, "
+                            "then prompt you to enroll the new MOK and reboot."
                             % running
                         )
                         return True
                     elif 'secureboot disabled' in output or 'secure boot disabled' in output:
                         print(
-                            "Your running kernel (%s) requires DKMS modules. You have Secure Boot disabled, but if you enable it in the future, you will need to sign or reinstall these DKMS modules for them to work. "
+                            "Your running kernel (%s) requires DKMS modules. You have Secure Boot disabled, but if "
+                            "you enable it in the future, you will need to sign or reinstall these DKMS modules for "
+                            "them to work. "
                             "If you would like to continue, please re-run ubuntu-drivers with --include-dkms."
                             % running
                         )
                         return True
                     elif 'this system doesn\'t support secure boot' in err:
                         print(
-                            "Your running kernel (%s) requires DKMS modules. Please use --include-dkms if you want to proceed."
+                            "Your running kernel (%s) requires DKMS modules. Please use --include-dkms if you want"
+                            " to proceed."
                             % running
                         )
                         return True
@@ -296,7 +301,10 @@ class KernelDetection(object):
 
                 # fallback generic response - n
                 print(
-                    "Your running kernel (%s) requires DKMS modules, and ubuntu-drivers was unable to determine if Secure Boot is enabled. If you have SB enabled, you will need to enroll a MOK to proceed, which will require access to your UEFI menu and administrative privileges. Please use --include-dkms if you want to proceed."
+                    "Your running kernel (%s) requires DKMS modules, and ubuntu-drivers was unable to determine if"
+                    " Secure Boot is enabled. If you have SB enabled, you will need to enroll a MOK to proceed, "
+                    "which will require access to your UEFI menu and administrative privileges. Please use "
+                    "--include-dkms if you want to proceed."
                     % running
                 )
                 return True
