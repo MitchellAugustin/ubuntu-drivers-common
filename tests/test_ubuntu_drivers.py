@@ -4901,10 +4901,12 @@ APT::Get::AllowUnauthenticated "true";
     def test_auto_install_chroot(self):
         '''ubuntu-drivers install for fake sysfs and chroot'''
 
+        env = os.environ.copy()
+        env['FAKEARCHIVE'] = 'TRUE'
         ud = subprocess.Popen(
             [self.tool_path, 'install'],
             universal_newlines=True, stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE, env=os.environ)
+            stderr=subprocess.PIPE, env=env)
         out, err = ud.communicate()
         # self.assertEqual(err, '')
         self.assertTrue('bcmwl-kernel-source' in out, out)
@@ -4913,10 +4915,12 @@ APT::Get::AllowUnauthenticated "true";
         self.assertEqual(ud.returncode, 0)
 
         # now all packages should be installed, so it should not do anything
+        env = os.environ.copy()
+        env['FAKEARCHIVE'] = 'TRUE'
         ud = subprocess.Popen(
             [self.tool_path, 'install'],
             universal_newlines=True, stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE, env=os.environ)
+            stderr=subprocess.PIPE, env=env)
         out, err = ud.communicate()
         # self.assertEqual(err, '')
         self.assertFalse('bcmwl-kernel-source' in out, out)
@@ -4928,10 +4932,12 @@ APT::Get::AllowUnauthenticated "true";
         listfile = os.path.join(self.chroot.path, 'pkgs')
         self.addCleanup(os.unlink, listfile)
 
+        env = os.environ.copy()
+        env['FAKEARCHIVE'] = 'TRUE'
         ud = subprocess.Popen(
             [self.tool_path, 'install', '--package-list', listfile],
             universal_newlines=True, stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE)
+            stderr=subprocess.PIPE, env=env)
         out, err = ud.communicate()
         # self.assertEqual(err, '')
         self.assertEqual(ud.returncode, 0)

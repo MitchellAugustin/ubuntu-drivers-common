@@ -460,8 +460,8 @@ def greet(config, gpgpu, free_only, package_list, no_oem, **kwargs):
 def install(config, **kwargs):
     '''Install a driver [driver[:version][,driver[:version]]]'''
 
-    # Require root
-    if os.geteuid() != 0:
+    # Require user to be root or use a fake archive (for tests)
+    if os.geteuid() != 0 and not os.environ["FAKEARCHIVE"]:
         print("Error: 'ubuntu-drivers install' must be run as root. Try using 'sudo'.", file=sys.stderr)
         sys.exit(1)
 
@@ -495,8 +495,8 @@ def autoinstall(config, **kwargs):
     '''Deprecated, please use "install" instead'''
     #print('install, {0}'.format(kwargs['driver']))
 
-    # Require root
-    if os.geteuid() != 0:
+    # Require user to be root or use a fake archive (for tests)
+    if os.geteuid() != 0 and not os.environ["FAKEARCHIVE"]:
         print("Error: 'ubuntu-drivers autoinstall' must be run as root. Try using 'sudo'.", file=sys.stderr)
         sys.exit(1)
 
