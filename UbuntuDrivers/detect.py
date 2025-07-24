@@ -1129,8 +1129,46 @@ def _process_driver_string(string):
 
     return driver
 
+def already_installed_filter(cache, packages, include_dkms):
+    # If there's no apt cache, there's no way to proceed.
+    if not cache:
+        return []
 
-def gpgpu_install_filter(packages, drivers_str, get_recommended=True):
+    for p, _ in sorted(packages.items(),
+                       key=cmp_to_key(lambda left, right:
+                                      _cmp_gfx_alternatives_gpgpu(left[0], right[0])),
+                       reverse=True):
+        candidate = packages[p].get('metapackage')
+        if candidate:
+            if cache[candidate].current_ver:
+                to_install = []
+                break
+            else:
+                to_install.append(p)
+                to_install.append(candidate)
+        print(candidate)
+
+        if candidate:
+            # Add the matching linux modules package
+            modules_package = get_linux_modules_metapackage(cache, p)
+            print(modules_package)
+            if modules_package and not cache[modules_package].current_ver:
+                if not include_dkms and "dkms" in modules_package:
+                    to_install.remove(p)
+                    to_install.remove(candidate)
+                    continue
+                to_install.remove(p)
+                to_install.append(modules_package)
+
+                lrm_meta = get_userspace_lrm_meta(cache, p)
+                if lrm_meta and not cache[lrm_meta].current_ver:
+                    # Add the lrm meta and drop the non lrm one
+                    to_install.append(lrm_meta)
+                    to_install.remove(p)
+                break
+    return to_install
+
+def gpgpu_install_filter(cache, include_dkms, packages, drivers_str, get_recommended=True):
     drivers = []
     allow = []
     result = {}
@@ -1173,7 +1211,7 @@ def gpgpu_install_filter(packages, drivers_str, get_recommended=True):
         drivers.append(driver)
 
     if len(drivers) < 1:
-        return result
+        return already_installed_filter(cache, result, include_dkms)
 
     # If the vendor is not specified, we assume it's nvidia
     it = 0
@@ -1190,7 +1228,7 @@ def gpgpu_install_filter(packages, drivers_str, get_recommended=True):
         if vendors_temp.__contains__(vendor):
             # TODO: raise error here
             logging.debug('Multiple nvidia versions passed at the same time')
-            return result
+            return already_installed_filter(cache, result, include_dkms)
         vendors_temp.append(vendor)
         it += 1
 
@@ -1230,10 +1268,10 @@ def gpgpu_install_filter(packages, drivers_str, get_recommended=True):
                         result[p] = packages[p]
                         # print('Found "recommended" flavour in %s' % (packages[p]))
                 break
-    return result
+    return already_installed_filter(cache, result, include_dkms)
 
 
-def auto_install_filter(packages, drivers_str='', get_recommended=True):
+def auto_install_filter(cache, include_dkms, packages, drivers_str='', get_recommended=True):
     '''Get packages which are appropriate for automatic installation.
 
     Return the subset of the given list of packages which are appropriate for
@@ -1248,7 +1286,7 @@ def auto_install_filter(packages, drivers_str='', get_recommended=True):
 
     # If users specify a driver, use gpgpu_install_filter()
     if drivers_str:
-        results = gpgpu_install_filter(packages, drivers_str)
+        results = gpgpu_install_filter(cache, include_dkms, packages, drivers_str)
         return results
 
     allow = []

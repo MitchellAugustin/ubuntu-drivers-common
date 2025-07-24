@@ -569,7 +569,7 @@ class DetectTest(unittest.TestCase):
             chroot.remove()
 
         self.assertTrue('nvidia-driver-450' in res)
-        packages = UbuntuDrivers.detect.gpgpu_install_filter(res, 'nvidia')
+        packages = UbuntuDrivers.detect.gpgpu_install_filter(cache, True, res, 'nvidia')
         # LTSB always wins on the server
         self.assertEqual(set(packages), set(['nvidia-driver-450']))
         self.assertEqual(linux_package, 'linux-generic-hwe-20.04')
@@ -802,7 +802,7 @@ class DetectTest(unittest.TestCase):
             chroot.remove()
 
         self.assertTrue('nvidia-driver-510' in res)
-        packages = UbuntuDrivers.detect.gpgpu_install_filter(res, 'nvidia')
+        packages = UbuntuDrivers.detect.gpgpu_install_filter(cache, True, res, 'nvidia')
         # LTSB always wins on the server
         self.assertEqual(set(packages), set(['nvidia-driver-510']))
         self.assertEqual(linux_package, 'linux-generic-hwe-20.04')
@@ -1059,7 +1059,7 @@ class DetectTest(unittest.TestCase):
             chroot.remove()
 
         self.assertTrue('nvidia-driver-520' in res)
-        packages = UbuntuDrivers.detect.gpgpu_install_filter(res, 'nvidia')
+        packages = UbuntuDrivers.detect.gpgpu_install_filter(cache, True, res, 'nvidia')
         # LTSB always wins on the server
         self.assertEqual(set(packages), set(['nvidia-driver-520']))
         self.assertEqual(linux_package, 'linux-generic-hwe-20.04')
@@ -1457,30 +1457,30 @@ class DetectTest(unittest.TestCase):
             chroot.remove()
 
         self.assertTrue('nvidia-driver-510' in res_install_510)
-        packages = UbuntuDrivers.detect.gpgpu_install_filter(res_install_510, 'nvidia')
+        packages = UbuntuDrivers.detect.gpgpu_install_filter(cache, True, res_install_510, 'nvidia')
         self.assertEqual(set(packages), set(['nvidia-driver-510']))
 
         self.assertTrue('nvidia-driver-470' in res_wrong_json)
         self.assertFalse('nvidia-driver-510' in res_wrong_json)
-        packages = UbuntuDrivers.detect.gpgpu_install_filter(res_wrong_json, 'nvidia')
+        packages = UbuntuDrivers.detect.gpgpu_install_filter(cache, True, res_wrong_json, 'nvidia')
         self.assertEqual(set(packages), set(['nvidia-driver-470']))
 
         self.assertTrue('nvidia-driver-470' in res_470_no_390)
         self.assertTrue('nvidia-driver-390' in res_470_no_390)
-        packages = UbuntuDrivers.detect.gpgpu_install_filter(res_470_no_390, 'nvidia')
+        packages = UbuntuDrivers.detect.gpgpu_install_filter(cache, True, res_470_no_390, 'nvidia')
         self.assertEqual(set(packages), set(['nvidia-driver-470']))
 
         self.assertTrue('nvidia-driver-470' in res_same_470)
-        packages = UbuntuDrivers.detect.gpgpu_install_filter(res_same_470, 'nvidia')
+        packages = UbuntuDrivers.detect.gpgpu_install_filter(cache, True, res_same_470, 'nvidia')
         self.assertEqual(set(packages), set(['nvidia-driver-470']))
 
         self.assertTrue('nvidia-driver-470' in res_470_no_490)
         self.assertFalse('nvidia-driver-490' in res_470_no_490)
-        packages = UbuntuDrivers.detect.gpgpu_install_filter(res_470_no_490, 'nvidia')
+        packages = UbuntuDrivers.detect.gpgpu_install_filter(cache, True, res_470_no_490, 'nvidia')
         self.assertEqual(set(packages), set(['nvidia-driver-470']))
 
         self.assertTrue('nvidia-driver-520' in res_520_only)
-        packages = UbuntuDrivers.detect.gpgpu_install_filter(res_520_only, 'nvidia')
+        packages = UbuntuDrivers.detect.gpgpu_install_filter(cache, True, res_520_only, 'nvidia')
         self.assertEqual(set(packages), set(['nvidia-driver-520']))
 
     def test_system_driver_packages_chroot_core_lrm_1(self):
@@ -1743,7 +1743,7 @@ class DetectTest(unittest.TestCase):
             chroot.remove()
 
         self.assertTrue(target_name in res)
-        packages = UbuntuDrivers.detect.gpgpu_install_filter(res, 'nvidia')
+        packages = UbuntuDrivers.detect.gpgpu_install_filter(cache, True, res, 'nvidia')
         # LTSB always wins on the server
         self.assertEqual(set(packages), set([target_name]))
         lrm_meta = UbuntuDrivers.detect.get_userspace_lrm_meta(cache, target_name)
@@ -1788,7 +1788,7 @@ class DetectTest(unittest.TestCase):
         finally:
             chroot.remove()
         self.assertTrue('nvidia-driver-410' in res)
-        packages = UbuntuDrivers.detect.gpgpu_install_filter(res, 'nvidia')
+        packages = UbuntuDrivers.detect.gpgpu_install_filter(cache, True, res, 'nvidia')
         self.assertEqual(set(packages), set(['nvidia-driver-410']))
         driver = list(packages.keys())[0]
         self.assertEqual(packages[driver].get('metapackage'), 'nvidia-headless-no-dkms-410')
@@ -1927,7 +1927,7 @@ class DetectTest(unittest.TestCase):
             chroot.remove()
 
         self.assertTrue('nvidia-driver-410' in res)
-        packages = UbuntuDrivers.detect.gpgpu_install_filter(res, 'nvidia')
+        packages = UbuntuDrivers.detect.gpgpu_install_filter(cache, True, res, 'nvidia')
         self.assertEqual(set(packages), set(['nvidia-driver-410']))
         driver = list(packages.keys())[0]
         self.assertEqual(packages[driver].get('metapackage'), 'nvidia-headless-no-dkms-410')
@@ -2066,7 +2066,7 @@ class DetectTest(unittest.TestCase):
             chroot.remove()
 
         self.assertTrue('nvidia-driver-410' in res)
-        packages = UbuntuDrivers.detect.gpgpu_install_filter(res, 'nvidia')
+        packages = UbuntuDrivers.detect.gpgpu_install_filter(cache, True, res, 'nvidia')
         self.assertEqual(set(packages), set(['nvidia-driver-410']))
         driver = list(packages.keys())[0]
         self.assertEqual(packages[driver].get('metapackage'), 'nvidia-headless-no-dkms-410')
@@ -2253,7 +2253,7 @@ class DetectTest(unittest.TestCase):
             chroot.remove()
 
         self.assertTrue('nvidia-driver-440' in res)
-        packages = UbuntuDrivers.detect.gpgpu_install_filter(res, 'nvidia')
+        packages = UbuntuDrivers.detect.gpgpu_install_filter(cache, True, res, 'nvidia')
         self.assertEqual(set(packages), set(['nvidia-driver-440']))
         driver = list(packages.keys())[0]
         self.assertEqual(packages[driver].get('metapackage'), 'nvidia-headless-no-dkms-440')
@@ -2645,7 +2645,7 @@ class DetectTest(unittest.TestCase):
             chroot.remove()
 
         self.assertTrue('nvidia-driver-418-server' in res)
-        packages = UbuntuDrivers.detect.gpgpu_install_filter(res, 'nvidia')
+        packages = UbuntuDrivers.detect.gpgpu_install_filter(cache, True, res, 'nvidia')
         # LTSB always wins on the server
         self.assertEqual(set(packages), set(['nvidia-driver-418-server']))
         driver = list(packages.keys())[0]
@@ -4406,9 +4406,8 @@ exec /sbin/modinfo "$@"
 
     def test_gpgpu_install_filter(self):
         '''gpgpu_install_filter()'''
-
         # gpgpu driver[:version][,driver[:version]]
-        self.assertEqual(UbuntuDrivers.detect.gpgpu_install_filter({}, 'nvidia'), {})
+        self.assertEqual(UbuntuDrivers.detect.gpgpu_install_filter(None, True, {}, 'nvidia'), {})
 
         pkgs = {'nvidia-driver-390': {'recommended': True},
                 'nvidia-driver-410': {},
@@ -4416,33 +4415,33 @@ exec /sbin/modinfo "$@"
 
         # Nothing is specified, we return the recommended driver
         self.assertEqual(
-            set(UbuntuDrivers.detect.gpgpu_install_filter(pkgs, 'nvidia')),
+            set(UbuntuDrivers.detect.gpgpu_install_filter(None, True, pkgs, 'nvidia')),
             set(['nvidia-driver-390']))
 
         # We specify that we want nvidia 410
         pkgs = {'nvidia-driver-390': {'recommended': True},
                 'nvidia-driver-410': {},
                 'nvidia-driver-340': {'recommended': False}}
-        self.assertEqual(set(UbuntuDrivers.detect.gpgpu_install_filter(pkgs, '410')),
+        self.assertEqual(set(UbuntuDrivers.detect.gpgpu_install_filter(None, True, pkgs, '410')),
                          set(['nvidia-driver-410']))
 
-        self.assertEqual(set(UbuntuDrivers.detect.gpgpu_install_filter(pkgs, 'nvidia:410')),
+        self.assertEqual(set(UbuntuDrivers.detect.gpgpu_install_filter(None, True, pkgs, 'nvidia:410')),
                          set(['nvidia-driver-410']))
 
         # Now with multiple drivers (to be implemented in the future)
-        self.assertEqual(set(UbuntuDrivers.detect.gpgpu_install_filter(pkgs, 'nvidia:410,amdgpu:284')),
+        self.assertEqual(set(UbuntuDrivers.detect.gpgpu_install_filter(None, True, pkgs, 'nvidia:410,amdgpu:284')),
                          set(['nvidia-driver-410']))
 
         # Specify the same nvidia driver twice, just to break things
-        self.assertEqual(UbuntuDrivers.detect.gpgpu_install_filter(pkgs, 'nvidia:410,nvidia:390'),
+        self.assertEqual(UbuntuDrivers.detect.gpgpu_install_filter(None, True, pkgs, 'nvidia:410,nvidia:390'),
                          {})
 
         # More incorrect values
-        self.assertEqual(UbuntuDrivers.detect.gpgpu_install_filter(pkgs, 'nv:410'), {})
+        self.assertEqual(UbuntuDrivers.detect.gpgpu_install_filter(None, True, pkgs, 'nv:410'), {})
 
-        self.assertEqual(UbuntuDrivers.detect.gpgpu_install_filter(pkgs, ':410'), {})
+        self.assertEqual(UbuntuDrivers.detect.gpgpu_install_filter(None, True, pkgs, ':410'), {})
 
-        self.assertEqual(UbuntuDrivers.detect.gpgpu_install_filter(pkgs, 'nvidia-driver:410'), {})
+        self.assertEqual(UbuntuDrivers.detect.gpgpu_install_filter(None, True, pkgs, 'nvidia-driver:410'), {})
 
     def test_system_driver_packages_freeonly(self):
         '''system_driver_packages() returns only free packages'''
