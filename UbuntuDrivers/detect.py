@@ -1130,10 +1130,12 @@ def _process_driver_string(string):
     return driver
 
 def already_installed_filter(cache, packages, include_dkms):
-    # If there's no apt cache, there's no way to proceed.
+    # If there's no apt cache, there's no way to check what
+    # is already installed - so don't filter anything down.
     if not cache:
-        return []
+        return packages
 
+    to_install = []
     for p, _ in sorted(packages.items(),
                        key=cmp_to_key(lambda left, right:
                                       _cmp_gfx_alternatives_gpgpu(left[0], right[0])),

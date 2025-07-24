@@ -23,6 +23,8 @@ from unittest.mock import patch
 import apt_pkg
 import aptdaemon.test
 
+import sys
+sys.path.insert(0, '.')
 import UbuntuDrivers.detect
 import UbuntuDrivers.kerneldetection
 
@@ -4386,7 +4388,7 @@ exec /sbin/modinfo "$@"
     def test_auto_install_filter(self):
         '''auto_install_filter()'''
 
-        self.assertEqual(UbuntuDrivers.detect.auto_install_filter({}), {})
+        self.assertEqual(UbuntuDrivers.detect.auto_install_filter(None, True, {}), {})
 
         pkgs = {'bcmwl-kernel-source': {},
                 'nvidia-current': {},
@@ -4394,14 +4396,14 @@ exec /sbin/modinfo "$@"
                 'pvr-omap4-egl': {}}
 
         self.assertEqual(
-            set(UbuntuDrivers.detect.auto_install_filter(pkgs)),
+            set(UbuntuDrivers.detect.auto_install_filter(None, True, pkgs)),
             set(['bcmwl-kernel-source', 'pvr-omap4-egl', 'nvidia-current']))
 
         # should not include non-recommended variants
         pkgs = {'bcmwl-kernel-source': {},
                 'nvidia-current': {'recommended': False},
                 'nvidia-173': {'recommended': True}}
-        self.assertEqual(set(UbuntuDrivers.detect.auto_install_filter(pkgs)),
+        self.assertEqual(set(UbuntuDrivers.detect.auto_install_filter(None, True, pkgs)),
                          set(['bcmwl-kernel-source', 'nvidia-173']))
 
     def test_gpgpu_install_filter(self):
