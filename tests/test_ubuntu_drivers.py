@@ -4206,7 +4206,7 @@ class DetectTest(unittest.TestCase):
 
         self.assertTrue('nvidia-driver-550-server' in res)
 
-        self.assertEqual(set(packages), set(['nvidia-driver-550-server']))
+        self.assertEqual(set(packages), set(['nvidia-headless-no-dkms-550-server', 'linux-modules-nvidia-550-server-generic']))
         # Get the linux-modules-nvidia module for the kernel
         self.assertEqual(modules_package, 'linux-modules-nvidia-550-server-generic')
 
