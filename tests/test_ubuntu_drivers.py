@@ -770,6 +770,7 @@ class DetectTest(unittest.TestCase):
 
             chroot.add_repository(archive.path, True, False)
             apt_pkg.init_config()
+            print("HELLO1")
             dpkg_status = os.path.abspath(os.path.join(chroot.path, "var", "lib", "dpkg", "status"))
             apt_pkg.config.set("Dir::State::status", dpkg_status)
             apt_pkg.init_system()
@@ -800,9 +801,11 @@ class DetectTest(unittest.TestCase):
             linux_package = UbuntuDrivers.detect.get_linux(cache)
             modules_package = UbuntuDrivers.detect.get_linux_modules_metapackage(cache,
                                                                                  'nvidia-driver-510')
+            print("Modules_package: " + str(modules_package))
+        except Exception as e:
+            print(e)
         finally:
             chroot.remove()
-
         self.assertTrue('nvidia-driver-510' in res)
         packages = UbuntuDrivers.detect.gpgpu_install_filter(cache, True, res, 'nvidia')
         # LTSB always wins on the server

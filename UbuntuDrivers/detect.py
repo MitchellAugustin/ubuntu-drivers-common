@@ -1147,13 +1147,18 @@ def already_installed_filter(cache, packages, include_dkms):
         if candidate:
             if cache[candidate].current_ver:
                 to_install = []
-                break
+                # Changed from break to continue, since *packages* may contain multiple different drivers, 
+                # and we'd skip the rest with break just because the first driver had a version installed
+                continue
             else:
                 to_install.append(p)
                 to_install.append(candidate)
-        print("Candidate: " + str(candidate))
+        else:
+            print("No candidate metapackage found for " + str(p))
+            to_install.append(p)
 
         if candidate:
+            print("Candidate: " + str(candidate))
             # Add the matching linux modules package
             modules_package = get_linux_modules_metapackage(cache, p)
             print(modules_package)
