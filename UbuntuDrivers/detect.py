@@ -1014,27 +1014,14 @@ def get_desktop_package_list(
     packages = system_driver_packages(
         apt_cache, sys_path, freeonly=free_only,
         include_oem=include_oem)
-    packages = auto_install_filter(apt_cache, packages, driver_string, get_recommended=False)
-    if not packages:
-        logging.debug('No drivers found for installation.')
-        return packages
-
-    depcache = apt_pkg.DepCache(apt_cache)
+    
     records = apt_pkg.PackageRecords(apt_cache)
-
-    # ignore packages which are already installed
-    to_install = []
     for p, _ in sorted(packages.items(),
-                       key=cmp_to_key(lambda left, right: _cmp_gfx_alternatives(left[0], right[0])),
-                       reverse=True):
+                    key=cmp_to_key(lambda left, right: _cmp_gfx_alternatives(left[0], right[0])),
+                    reverse=True):
         package_obj = apt_cache[p]
         if not package_obj.current_ver:
-
-            candidate = depcache.get_candidate_ver(package_obj)
-            records.lookup(candidate.file_list[0])
-            to_install.append(p)
-
-            # See if runtimepm is supported
+             # See if runtimepm is supported
             if records['runtimepm']:
                 # Create a file for nvidia-prime
                 try:
@@ -1045,23 +1032,12 @@ def get_desktop_package_list(
                     # No need to error out here, since package
                     # installation will fail
                     pass
-            # Add the matching linux modules package when available
-            try:
-                modules_package = get_linux_modules_metapackage(apt_cache, p)
-                if modules_package and not apt_cache[modules_package].current_ver:
-                    if not include_dkms and "dkms" in modules_package:
-                        to_install.remove(p)
-                        continue
-                    to_install.append(modules_package)
 
-                    lrm_meta = get_userspace_lrm_meta(apt_cache, p)
-                    if lrm_meta and not apt_cache[lrm_meta].current_ver:
-                        # Add the lrm meta and drop the non lrm one
-                        to_install.append(lrm_meta)
-                        to_install.remove(p)
-                    break
-            except KeyError:
-                pass
+    to_install = []
+    to_install = auto_install_filter(apt_cache, packages, driver_string, get_recommended=False)
+    if not to_install:
+        logging.debug('No drivers found for installation.')
+        return to_install
 
     return to_install
 
@@ -1130,6 +1106,17 @@ def _process_driver_string(string):
     return driver
 
 def already_installed_filter(cache, packages, include_dkms):
+    # already_installed_filter takes a list of packages of this format:
+    # {'modalias': 'pci:v000010DEd000010C3sv00003842sd00002670bc03sc03i00',
+    # 'syspath': '/tmp/umockdev.8CRPA3/sys/devices/graphics', 'free': False,
+    #  'from_distro': False, 'support': None, 'open_preferred': False,
+    #  'vendor': 'NVIDIA Corporation', 'model': 'GT218 [GeForce 8400 GS Rev. 3]',
+    #  'metapackage': 'nvidia-headless-no-dkms-410', 'recommended': True}
+    # checks to see if the requested packages are alreay installed, then filters
+    # them out if so.
+    # It returns a simplified list of just the package names for apt to install,
+    # of the form:
+    # ['nvidia-driver-410', 'nvidia-headless-no-dkms-410']
     # If there's no apt cache, there's no way to check what
     # is already installed - so don't filter anything down.
     print("Packages: " + str(packages))
@@ -1163,10 +1150,15 @@ def already_installed_filter(cache, packages, include_dkms):
             modules_package = get_linux_modules_metapackage(cache, p)
             print(modules_package)
             if modules_package and not cache[modules_package].current_ver:
+                print("cur ver: " + str(cache[modules_package].current_ver))
                 if not include_dkms and "dkms" in modules_package:
+                    print("Removing p: " + p)
+                    print("Removing cand: " + candidate)
                     to_install.remove(p)
                     to_install.remove(candidate)
                     continue
+                print("Removing p2: " + p)
+                print("Removing cand2: " + candidate)
                 to_install.remove(p)
                 to_install.append(modules_package)
 
@@ -1174,8 +1166,10 @@ def already_installed_filter(cache, packages, include_dkms):
                 if lrm_meta and not cache[lrm_meta].current_ver:
                     # Add the lrm meta and drop the non lrm one
                     to_install.append(lrm_meta)
+                    print("Removing p3: " + p)
                     to_install.remove(p)
-                break
+                continue
+    print("to_install_final:  "+ str(to_install))
     return to_install
 
 def gpgpu_install_filter(cache, include_dkms, packages, drivers_str, get_recommended=True):
@@ -1202,8 +1196,9 @@ def gpgpu_install_filter(cache, include_dkms, packages, drivers_str, get_recomme
     ubuntu-drivers autoinstall --gpgpu amdgpu:version
     '''
     if not packages:
-        return result
+        return list(result.keys())
 
+    print("Getting here")
     if drivers_str:
         # Just one driver
         # e.g. --gpgpu 390
@@ -1262,6 +1257,7 @@ def gpgpu_install_filter(cache, include_dkms, packages, drivers_str, get_recomme
 
     # FIXME: if no flavour is specified, pick the recommended driver ?
     # print('packages: %s' % packages)
+    print("gettinghere2")
     for p in allow:
         # If the version was specified, we override the recommended attribute
         for driver in drivers:
@@ -1278,6 +1274,7 @@ def gpgpu_install_filter(cache, include_dkms, packages, drivers_str, get_recomme
                         result[p] = packages[p]
                         # print('Found "recommended" flavour in %s' % (packages[p]))
                 break
+    print("Getting here, result: " + str(result))
     return already_installed_filter(cache, result, include_dkms)
 
 
@@ -1295,6 +1292,7 @@ def auto_install_filter(cache, include_dkms, packages, drivers_str='', get_recom
                  'open-vm-tools*', 'hwe-*-meta', 'oem-*-meta', 'broadcom-sta-dkms']
 
     # If users specify a driver, use gpgpu_install_filter()
+    print("Packages auto: " + str(packages))
     if drivers_str:
         results = gpgpu_install_filter(cache, include_dkms, packages, drivers_str)
         return results
