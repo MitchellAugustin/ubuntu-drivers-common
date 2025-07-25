@@ -1014,7 +1014,6 @@ def get_desktop_package_list(
     packages = system_driver_packages(
         apt_cache, sys_path, freeonly=free_only,
         include_oem=include_oem)
-    
     records = apt_pkg.PackageRecords(apt_cache)
     for p, _ in sorted(packages.items(),
                     key=cmp_to_key(lambda left, right: _cmp_gfx_alternatives(left[0], right[0])),
@@ -1022,19 +1021,23 @@ def get_desktop_package_list(
         package_obj = apt_cache[p]
         if not package_obj.current_ver:
              # See if runtimepm is supported
-            if records['runtimepm']:
-                # Create a file for nvidia-prime
-                try:
-                    pm_fd = open('/run/nvidia_runtimepm_supported', 'w')
-                    pm_fd.write('\n')
-                    pm_fd.close()
-                except PermissionError:
-                    # No need to error out here, since package
-                    # installation will fail
-                    pass
+            try:
+                if records and records['runtimepm']:
+                    # Create a file for nvidia-prime
+                    try:
+                        pm_fd = open('/run/nvidia_runtimepm_supported', 'w')
+                        pm_fd.write('\n')
+                        pm_fd.close()
+                    except PermissionError:
+                        # No need to error out here, since package
+                        # installation will fail
+                        pass
+            except Exception as e:
+                #print("EXC: " + str(e))
+                pass
 
     to_install = []
-    to_install = auto_install_filter(apt_cache, packages, driver_string, get_recommended=False)
+    to_install = auto_install_filter(apt_cache, include_dkms, packages, driver_string, get_recommended=False)
     if not to_install:
         logging.debug('No drivers found for installation.')
         return to_install
@@ -1292,7 +1295,6 @@ def auto_install_filter(cache, include_dkms, packages, drivers_str='', get_recom
                  'open-vm-tools*', 'hwe-*-meta', 'oem-*-meta', 'broadcom-sta-dkms']
 
     # If users specify a driver, use gpgpu_install_filter()
-    print("Packages auto: " + str(packages))
     if drivers_str:
         results = gpgpu_install_filter(cache, include_dkms, packages, drivers_str)
         return results
@@ -1308,7 +1310,7 @@ def auto_install_filter(cache, include_dkms, packages, drivers_str='', get_recom
                 result[p] = packages[p]
         else:
             result[p] = packages[p]
-    return result
+    return list(result.keys())
 
 
 def detect_plugin_packages(apt_cache=None):

@@ -4954,8 +4954,6 @@ APT::Get::AllowUnauthenticated "true";
             universal_newlines=True, stdout=subprocess.PIPE,
             stderr=subprocess.PIPE)
         out, err = ud.communicate()
-        print("Out: " + str(out))
-        print("Err: " + str(err))
         # self.assertEqual(err, '')
         self.assertEqual(ud.returncode, 0)
 
