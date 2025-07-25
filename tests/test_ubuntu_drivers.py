@@ -2962,7 +2962,7 @@ class DetectTest(unittest.TestCase):
             res = UbuntuDrivers.detect.system_driver_packages(cache,
                                                               sys_path=self.umockdev.get_sys_dir())
             linux_package = UbuntuDrivers.detect.get_linux(cache)
-            packages = UbuntuDrivers.detect.auto_install_filter(res, 'nvidia')
+            packages = UbuntuDrivers.detect.auto_install_filter(None, res, 'nvidia')
 
             modules_package = UbuntuDrivers.detect.get_linux_modules_metapackage(cache,
                                                                                  'nvidia-driver-515')
@@ -3294,7 +3294,7 @@ class DetectTest(unittest.TestCase):
             res = UbuntuDrivers.detect.system_gpgpu_driver_packages(cache,
                                                                     sys_path=self.umockdev.get_sys_dir())
             linux_package = UbuntuDrivers.detect.get_linux(cache)
-            packages = UbuntuDrivers.detect.auto_install_filter(res, 'nvidia')
+            packages = UbuntuDrivers.detect.auto_install_filter(None, res, 'nvidia')
 
             modules_package = UbuntuDrivers.detect.get_linux_modules_metapackage(cache,
                                                                                  'nvidia-driver-525-server')
@@ -3520,7 +3520,7 @@ class DetectTest(unittest.TestCase):
 
             res = UbuntuDrivers.detect.system_gpgpu_driver_packages(cache,
                                                                     sys_path=self.umockdev.get_sys_dir())
-            packages = UbuntuDrivers.detect.auto_install_filter(res, 'nvidia')
+            packages = UbuntuDrivers.detect.auto_install_filter(None, res, 'nvidia')
 
             modules_package = UbuntuDrivers.detect.get_linux_modules_metapackage(cache,
                                                                                  'nvidia-driver-560-server-open')
@@ -3782,7 +3782,7 @@ class DetectTest(unittest.TestCase):
 
             res = UbuntuDrivers.detect.system_gpgpu_driver_packages(cache,
                                                                     sys_path=self.umockdev.get_sys_dir())
-            packages = UbuntuDrivers.detect.auto_install_filter(res, 'nvidia')
+            packages = UbuntuDrivers.detect.auto_install_filter(None, res, 'nvidia')
 
             modules_package = UbuntuDrivers.detect.get_linux_modules_metapackage(cache,
                                                                                  'nvidia-driver-550-server')
@@ -3968,7 +3968,7 @@ class DetectTest(unittest.TestCase):
 
             res = UbuntuDrivers.detect.system_gpgpu_driver_packages(cache,
                                                                     sys_path=self.umockdev.get_sys_dir())
-            packages = UbuntuDrivers.detect.auto_install_filter(res, 'nvidia')
+            packages = UbuntuDrivers.detect.auto_install_filter(None, res, 'nvidia')
 
             modules_package = UbuntuDrivers.detect.get_linux_modules_metapackage(cache,
                                                                                  'nvidia-driver-550-server-open')
@@ -4191,7 +4191,7 @@ class DetectTest(unittest.TestCase):
 
             res = UbuntuDrivers.detect.system_gpgpu_driver_packages(cache,
                                                                     sys_path=self.umockdev.get_sys_dir())
-            packages = UbuntuDrivers.detect.auto_install_filter(res, 'nvidia')
+            packages = UbuntuDrivers.detect.auto_install_filter(None, res, 'nvidia')
 
             modules_package = UbuntuDrivers.detect.get_linux_modules_metapackage(cache,
                                                                                  'nvidia-driver-550-server')
@@ -4948,6 +4948,8 @@ APT::Get::AllowUnauthenticated "true";
             universal_newlines=True, stdout=subprocess.PIPE,
             stderr=subprocess.PIPE)
         out, err = ud.communicate()
+        print("Out: " + str(out))
+        print("Err: " + str(err))
         # self.assertEqual(err, '')
         self.assertEqual(ud.returncode, 0)
 

@@ -1014,7 +1014,7 @@ def get_desktop_package_list(
     packages = system_driver_packages(
         apt_cache, sys_path, freeonly=free_only,
         include_oem=include_oem)
-    packages = auto_install_filter(packages, driver_string, get_recommended=False)
+    packages = auto_install_filter(apt_cache, packages, driver_string, get_recommended=False)
     if not packages:
         logging.debug('No drivers found for installation.')
         return packages
@@ -1132,6 +1132,7 @@ def _process_driver_string(string):
 def already_installed_filter(cache, packages, include_dkms):
     # If there's no apt cache, there's no way to check what
     # is already installed - so don't filter anything down.
+    print("Packages: " + str(packages))
     if not cache:
         return packages
 
