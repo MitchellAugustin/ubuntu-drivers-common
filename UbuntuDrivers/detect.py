@@ -1141,6 +1141,8 @@ def already_installed_filter(cache, packages, include_dkms):
                        key=cmp_to_key(lambda left, right:
                                       _cmp_gfx_alternatives_gpgpu(left[0], right[0])),
                        reverse=True):
+        print("Package name: " + str(p))
+        print("packages[p]: " + str(packages[p]))
         candidate = packages[p].get('metapackage')
         if candidate:
             if cache[candidate].current_ver:
@@ -1149,7 +1151,7 @@ def already_installed_filter(cache, packages, include_dkms):
             else:
                 to_install.append(p)
                 to_install.append(candidate)
-        print(candidate)
+        print("Candidate: " + str(candidate))
 
         if candidate:
             # Add the matching linux modules package
