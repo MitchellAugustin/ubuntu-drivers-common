@@ -1016,25 +1016,6 @@ def get_desktop_package_list(
         include_oem=include_oem)
     records = apt_pkg.PackageRecords(apt_cache)
 
-    # See if runtimepm is supported
-    # This was originally in the inner body of a loop over packages, but
-    # does not appear to have a dependency on any individual package,
-    # so it has been moved out of the loop.
-    try:
-        if records and records['runtimepm']:
-            # Create a file for nvidia-prime
-            try:
-                pm_fd = open('/run/nvidia_runtimepm_supported', 'w')
-                pm_fd.write('\n')
-                pm_fd.close()
-            except PermissionError:
-                # No need to error out here, since package
-                # installation will fail
-                pass
-    except Exception as e:
-        print("/run/nvidia_runtimepm_supported check failed: " + str(e))
-        pass
-
     to_install = []
     to_install = auto_install_filter(apt_cache, include_dkms, packages, driver_string, get_recommended=False)
     if not to_install:
@@ -1129,12 +1110,31 @@ def already_installed_filter(cache, packages, include_dkms, comparator):
     if not cache:
         return list(packages.keys())
 
+    depcache = apt_pkg.DepCache(cache)
+    records = apt_pkg.PackageRecords(cache)
     to_install = []
     for p, _ in sorted(packages.items(),
                        key=cmp_to_key(lambda left, right:
                                       comparator(left[0], right[0])),
                        reverse=True):
-        candidate = packages[p].get('metapackage')
+        if comparator == _cmp_gfx_alternatives:
+            candidate = depcache.get_candidate_ver(packages[p])
+            records.lookup(candidate.file_list[0])
+        else:
+            candidate = packages[p].get('metapackage')
+        # See if runtimepm is supported
+        records.lookup(candidate.file_list[0])
+        if records and records['runtimepm']:
+            # Create a file for nvidia-prime
+            try:
+                pm_fd = open('/run/nvidia_runtimepm_supported', 'w')
+                pm_fd.write('\n')
+                pm_fd.close()
+            except PermissionError:
+                # No need to error out here, since package
+                # installation will fail
+                pass
+
         if candidate:
             if cache[candidate].current_ver:
                 to_install = []
