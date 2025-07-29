@@ -1108,7 +1108,7 @@ def _process_driver_string(string):
     return driver
 
 
-def already_installed_filter(cache, packages, include_dkms):
+def already_installed_filter(cache, packages, include_dkms, comparator):
     '''
     Takes a list of packages of this format:
     {'modalias': 'pci:v000010DEd000010C3sv00003842sd00002670bc03sc03i00',
@@ -1132,7 +1132,7 @@ def already_installed_filter(cache, packages, include_dkms):
     to_install = []
     for p, _ in sorted(packages.items(),
                        key=cmp_to_key(lambda left, right:
-                                      _cmp_gfx_alternatives_gpgpu(left[0], right[0])),
+                                      comparator(left[0], right[0])),
                        reverse=True):
         candidate = packages[p].get('metapackage')
         if candidate:
@@ -1165,10 +1165,6 @@ def already_installed_filter(cache, packages, include_dkms):
                     to_install.append(lrm_meta)
                     to_install.remove(p)
                 break
-        
-        # If we have a valid gfx driver, we can stop looking through candidates
-        if to_install:
-            break
 
     # Final filter
     for p in sorted(to_install, reverse=True):
@@ -1226,7 +1222,7 @@ def gpgpu_install_filter(cache, include_dkms, packages, drivers_str, get_recomme
         drivers.append(driver)
 
     if len(drivers) < 1:
-        return already_installed_filter(cache, result, include_dkms)
+        return already_installed_filter(cache, result, include_dkms, _cmp_gfx_alternatives_gpgpu)
 
     # If the vendor is not specified, we assume it's nvidia
     it = 0
@@ -1243,7 +1239,7 @@ def gpgpu_install_filter(cache, include_dkms, packages, drivers_str, get_recomme
         if vendors_temp.__contains__(vendor):
             # TODO: raise error here
             logging.debug('Multiple nvidia versions passed at the same time')
-            return already_installed_filter(cache, result, include_dkms)
+            return already_installed_filter(cache, result, include_dkms, _cmp_gfx_alternatives_gpgpu)
         vendors_temp.append(vendor)
         it += 1
 
@@ -1283,10 +1279,10 @@ def gpgpu_install_filter(cache, include_dkms, packages, drivers_str, get_recomme
                         result[p] = packages[p]
                         # print('Found "recommended" flavour in %s' % (packages[p]))
                 break
-    return already_installed_filter(cache, result, include_dkms)
+    return already_installed_filter(cache, result, include_dkms, _cmp_gfx_alternatives_gpgpu)
 
 
-def auto_install_filter(cache, include_dkms, packages, drivers_str='', get_recommended=True):
+def auto_install_filter(cache, include_dkms, packages, drivers_str='', get_recommended=True, comparator=None):
     '''Get packages which are appropriate for automatic installation.
 
     Return the subset of the given list of packages which are appropriate for
@@ -1299,9 +1295,13 @@ def auto_install_filter(cache, include_dkms, packages, drivers_str='', get_recom
     whitelist = ['bcmwl*', 'pvr-omap*', 'virtualbox-guest*', 'nvidia-*',
                  'open-vm-tools*', 'hwe-*-meta', 'oem-*-meta', 'broadcom-sta-dkms']
 
+    # Use _cmp_gfx_alternatives as the default comparator, if none is specified
+    if not comparator:
+        comparator = _cmp_gfx_alternatives
+
     # If users specify a driver, use gpgpu_install_filter()
     if drivers_str:
-        results = gpgpu_install_filter(cache, include_dkms, packages, drivers_str)
+        results = gpgpu_install_filter(cache, include_dkms, packages, drivers_str, comparator)
         return results
 
     allow = []
@@ -1315,7 +1315,7 @@ def auto_install_filter(cache, include_dkms, packages, drivers_str='', get_recom
                 result[p] = packages[p]
         else:
             result[p] = packages[p]
-    return already_installed_filter(cache, result, include_dkms)
+    return already_installed_filter(cache, result, include_dkms, comparator)
 
 
 def detect_plugin_packages(apt_cache=None):
