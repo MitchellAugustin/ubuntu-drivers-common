@@ -1118,8 +1118,8 @@ def already_installed_filter(cache, packages, include_dkms, comparator):
                                       comparator(left[0], right[0])),
                        reverse=True):
         if comparator == _cmp_gfx_alternatives:
-            candidate = depcache.get_candidate_ver(cache[p])
-            records.lookup(candidate.file_list[0])
+            candidate_ver = depcache.get_candidate_ver(cache[p])
+            records.lookup(candidate_ver.file_list[0])
             # See if runtimepm is supported
             if records['runtimepm']:
                 # Create a file for nvidia-prime
@@ -1131,8 +1131,8 @@ def already_installed_filter(cache, packages, include_dkms, comparator):
                     # No need to error out here, since package
                     # installation will fail
                     pass
-        else:
-            candidate = packages[p].get('metapackage')
+
+        candidate = packages[p].get('metapackage')
 
         if candidate:
             if cache[candidate].current_ver:
