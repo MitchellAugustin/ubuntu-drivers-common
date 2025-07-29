@@ -1145,25 +1145,25 @@ def already_installed_filter(cache, packages, include_dkms, comparator):
             logging.debug("No candidate metapackage found for " + str(p))
             to_install.append(p)
 
-        if candidate:
-            logging.debug("Candidate: " + str(candidate))
-            # Add the matching linux modules package
-            modules_package = get_linux_modules_metapackage(cache, p)
-            logging.debug(modules_package)
-            if modules_package and not cache[modules_package].current_ver:
-                if not include_dkms and "dkms" in modules_package:
-                    to_install.remove(p)
-                    to_install.remove(candidate)
-                    continue
+        logging.debug("Candidate: " + str(candidate))
+        # Add the matching linux modules package
+        modules_package = get_linux_modules_metapackage(cache, p)
+        logging.debug(modules_package)
+        if modules_package and not cache[modules_package].current_ver:
+            if not include_dkms and "dkms" in modules_package:
                 to_install.remove(p)
-                to_install.append(modules_package)
+                if candidate in to_install:
+                    to_install.remove(candidate)
+                continue
+            to_install.remove(p)
+            to_install.append(modules_package)
 
-                lrm_meta = get_userspace_lrm_meta(cache, p)
-                if lrm_meta and not cache[lrm_meta].current_ver:
-                    # Add the lrm meta and drop the non lrm one
-                    to_install.append(lrm_meta)
-                    to_install.remove(p)
-                break
+            lrm_meta = get_userspace_lrm_meta(cache, p)
+            if lrm_meta and not cache[lrm_meta].current_ver:
+                # Add the lrm meta and drop the non lrm one
+                to_install.append(lrm_meta)
+                to_install.remove(p)
+            break
 
     # Final filter
     for p in sorted(to_install, reverse=True):
