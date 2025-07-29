@@ -1120,20 +1120,19 @@ def already_installed_filter(cache, packages, include_dkms, comparator):
         if comparator == _cmp_gfx_alternatives:
             candidate = depcache.get_candidate_ver(packages[p])
             records.lookup(candidate.file_list[0])
+            # See if runtimepm is supported
+            if records['runtimepm']:
+                # Create a file for nvidia-prime
+                try:
+                    pm_fd = open('/run/nvidia_runtimepm_supported', 'w')
+                    pm_fd.write('\n')
+                    pm_fd.close()
+                except PermissionError:
+                    # No need to error out here, since package
+                    # installation will fail
+                    pass
         else:
             candidate = packages[p].get('metapackage')
-        # See if runtimepm is supported
-        records.lookup(candidate.file_list[0])
-        if records and records['runtimepm']:
-            # Create a file for nvidia-prime
-            try:
-                pm_fd = open('/run/nvidia_runtimepm_supported', 'w')
-                pm_fd.write('\n')
-                pm_fd.close()
-            except PermissionError:
-                # No need to error out here, since package
-                # installation will fail
-                pass
 
         if candidate:
             if cache[candidate].current_ver:
