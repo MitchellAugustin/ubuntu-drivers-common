@@ -1118,7 +1118,7 @@ def already_installed_filter(cache, packages, include_dkms, comparator):
                                       comparator(left[0], right[0])),
                        reverse=True):
         if comparator == _cmp_gfx_alternatives:
-            candidate = depcache.get_candidate_ver(packages[p])
+            candidate = depcache.get_candidate_ver(cache[p])
             records.lookup(candidate.file_list[0])
             # See if runtimepm is supported
             if records['runtimepm']:
