@@ -1014,7 +1014,6 @@ def get_desktop_package_list(
     packages = system_driver_packages(
         apt_cache, sys_path, freeonly=free_only,
         include_oem=include_oem)
-    records = apt_pkg.PackageRecords(apt_cache)
 
     to_install = []
     to_install = auto_install_filter(apt_cache, include_dkms, packages, driver_string, get_recommended=False)
