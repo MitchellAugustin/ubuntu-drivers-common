@@ -1007,6 +1007,26 @@ def system_device_drivers(apt_cache=None, sys_path=None, freeonly=False):
     return result
 
 
+def get_installed_packages_by_glob(apt_cache, glob_pattern):
+    '''Query apt-cache for installed packages matching a specific glob pattern.
+    
+    Args:
+        apt_cache: The apt cache object
+        glob_pattern: Glob pattern to match package names (e.g., "nvidia-driver-*")
+        
+    Returns:
+        List of strings containing the names of all installed packages that match the pattern
+    '''
+    installed_packages = []
+    
+    for package in apt_cache.packages:
+        package_name = package.name
+        if package.current_ver and fnmatch.fnmatch(package_name, glob_pattern):
+            installed_packages.append(package_name)
+    
+    return sorted(installed_packages)
+
+
 def get_desktop_package_list(
         apt_cache, sys_path=None, free_only=False, include_oem=True,
         driver_string='', include_dkms=False):

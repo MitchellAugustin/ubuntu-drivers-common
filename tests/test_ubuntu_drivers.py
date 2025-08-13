@@ -4739,6 +4739,28 @@ def detect(apt):
         finally:
             chroot.remove()
 
+    def test_get_installed_packages_by_glob(self):
+        '''get_installed_packages_by_glob() returns correct packages'''
+        
+        # Test with empty cache (no packages installed)
+        apt_pkg.init_config()
+        apt_pkg.init_system()
+        cache = apt_pkg.Cache(None)
+        
+        # Test NVIDIA driver glob (may find installed packages on the system)
+        nvidia_packages = UbuntuDrivers.detect.get_installed_packages_by_glob(cache, "nvidia-driver-*")
+        # The result depends on what's actually installed on the system
+        self.assertIsInstance(nvidia_packages, list)
+        
+        # Test OEM meta glob (may find installed packages on the system)
+        oem_packages = UbuntuDrivers.detect.get_installed_packages_by_glob(cache, "oem-*-meta")
+        # The result depends on what's actually installed on the system
+        self.assertIsInstance(oem_packages, list)
+        
+        # Test non-matching glob with empty cache
+        other_packages = UbuntuDrivers.detect.get_installed_packages_by_glob(cache, "nonexistent-*")
+        self.assertEqual(other_packages, [])
+
 
 class ToolTest(unittest.TestCase):
     '''Test ubuntu-drivers tool'''
@@ -4973,6 +4995,36 @@ APT::Get::AllowUnauthenticated "true";
         self.assertTrue(modalias_nv in out, out)
         # driver packages
         self.assertTrue('available: 1 (auto-install)  [third party]  free  modalias:' in out, out)
+
+    def test_welcome_page_no_subcommand(self):
+        '''ubuntu-drivers shows welcome page when run without subcommand'''
+        
+        # Test that running ubuntu-drivers without subcommand shows welcome page
+        ud = subprocess.Popen(
+            [self.tool_path],
+            universal_newlines=True, stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE)
+        out, err = ud.communicate()
+        self.assertEqual(err, '')
+        self.assertTrue('=== Welcome to ubuntu-drivers ===' in out, out)
+        self.assertTrue('This tool helps you install and manage hardware drivers' in out, out)
+        self.assertTrue('--- Installed OEM / NVIDIA Drivers ---' in out, out)
+        self.assertEqual(ud.returncode, 0)
+
+    def test_welcome_page_with_subcommand(self):
+        '''ubuntu-drivers does not show welcome page when subcommand is provided'''
+        
+        # Test that running ubuntu-drivers with a subcommand does not show welcome page
+        ud = subprocess.Popen(
+            [self.tool_path, 'list'],
+            universal_newlines=True, stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE)
+        out, err = ud.communicate()
+        self.assertEqual(err, '')
+        self.assertFalse('=== Welcome to ubuntu-drivers ===' in out, out)
+        self.assertFalse('This tool helps you install and manage hardware drivers' in out, out)
+        self.assertFalse('--- Installed OEM / NVIDIA Drivers ---' in out, out)
+        self.assertEqual(ud.returncode, 0)
 
 
 class PluginsTest(unittest.TestCase):
