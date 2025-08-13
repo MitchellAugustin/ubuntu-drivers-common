@@ -416,6 +416,65 @@ def show_welcome_page():
     
     print("\nFor more information, use 'ubuntu-drivers --help' or 'ubuntu-drivers list'")
     print("To install drivers, use 'sudo ubuntu-drivers install'")
+    
+    # Check NVIDIA module status and kernel compatibility
+    try:
+        nvidia_status = UbuntuDrivers.detect.check_nvidia_module_status()
+        
+        if nvidia_status['loaded']:
+            print('\n--- NVIDIA Module Status ---')
+            print('✓ NVIDIA module is currently loaded')
+            
+            if nvidia_status['current_module_path']:
+                print(f'  Current module path: {nvidia_status["current_module_path"]}')
+            
+            if nvidia_status['needs_reboot']:
+                print(f'\n⚠️  Kernel version difference detected:')
+                print(f'   Current kernel: {os.uname().release}')
+                print(f'   Next boot kernel: {nvidia_status["next_boot_kernel"]}')
+                print('   You should reboot to use the NVIDIA driver with the new kernel.')
+                
+                if nvidia_status['module_missing']:
+                    print('\n❌  ERROR: NVIDIA module is missing for the next boot kernel!')
+                    print('   Please re-run ubuntu-drivers to install the missing module.')
+                elif nvidia_status['next_boot_module_path']:
+                    print(f'   ✓ Next boot module path: {nvidia_status["next_boot_module_path"]}')
+                    # Show both paths when they differ
+                    if (nvidia_status['current_module_path'] and 
+                        nvidia_status['current_module_path'] != nvidia_status['next_boot_module_path']):
+                        print(f'   📍 Module paths differ:')
+                        print(f'      Current:  {nvidia_status["current_module_path"]}')
+                        print(f'      Next boot: {nvidia_status["next_boot_module_path"]}')
+            else:
+                print('   ✓ Kernel versions match - no reboot needed')
+                # Even when kernels match, show next boot path if available and different
+                if (nvidia_status['next_boot_module_path'] and 
+                    nvidia_status['current_module_path'] and
+                    nvidia_status['current_module_path'] != nvidia_status['next_boot_module_path']):
+                    print(f'   📍 Next boot module path: {nvidia_status["next_boot_module_path"]}')
+                    print(f'      (differs from current: {nvidia_status["current_module_path"]})')
+        else:
+            print('\n--- NVIDIA Module Status ---')
+            print('ℹ️  NVIDIA module is not currently loaded')
+            
+            # Show next boot module path even when not loaded
+            if nvidia_status['next_boot_module_path']:
+                print(f'   📍 Next boot module path: {nvidia_status["next_boot_module_path"]}')
+            
+            # If a different next boot kernel is detected, show its status block
+            if nvidia_status.get('needs_reboot') and nvidia_status.get('next_boot_kernel'):
+                print('\n--- Next Boot NVIDIA Status ---')
+                print(f'Kernel: {nvidia_status["next_boot_kernel"]}')
+                if nvidia_status.get('module_missing'):
+                    print('Module: MISSING')
+                elif nvidia_status.get('next_boot_module_path'):
+                    print(f'Module: {nvidia_status["next_boot_module_path"]}')
+                else:
+                    print('Module: unknown')
+            
+    except Exception as e:
+        print(f'\n--- NVIDIA Module Status ---')
+        print(f'⚠️  Could not check NVIDIA module status: {e}')
 
 #
 # main

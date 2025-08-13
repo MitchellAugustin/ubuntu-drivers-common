@@ -15,6 +15,7 @@ import subprocess
 import functools
 import re
 import json
+import glob
 
 import apt_pkg
 
@@ -1009,21 +1010,21 @@ def system_device_drivers(apt_cache=None, sys_path=None, freeonly=False):
 
 def get_installed_packages_by_glob(apt_cache, glob_pattern):
     '''Query apt-cache for installed packages matching a specific glob pattern.
-    
+
     Args:
         apt_cache: The apt cache object
         glob_pattern: Glob pattern to match package names (e.g., "nvidia-driver-*")
-        
+
     Returns:
         List of strings containing the names of all installed packages that match the pattern
     '''
     installed_packages = []
-    
+
     for package in apt_cache.packages:
         package_name = package.name
         if package.current_ver and fnmatch.fnmatch(package_name, glob_pattern):
             installed_packages.append(package_name)
-    
+
     return sorted(installed_packages)
 
 
@@ -1712,3 +1713,320 @@ def get_linux_modules_metapackage(apt_cache, candidate):
         pass
 
     return metapackage
+
+
+def _get_kernel_from_grub_entry(entry_num):
+    '''Convert grub entry number to kernel version by parsing grub.cfg'''
+    try:
+        grub_cfg = '/boot/grub/grub.cfg'
+        if not os.path.exists(grub_cfg):
+            return None
+
+        with open(grub_cfg, 'r') as f:
+            grub_content = f.read()
+
+        # Find all menuentry lines and their corresponding linux lines
+        menu_entries = []
+        lines = grub_content.split('\n')
+        current_entry = None
+
+        for line in lines:
+            if line.strip().startswith('menuentry'):
+                current_entry = line.strip()
+            elif line.strip().startswith('linux') and current_entry:
+                # Extract kernel version from linux line
+                match = re.search(r'linux\s+/vmlinuz-([^\s]+)', line)
+                if match:
+                    menu_entries.append(match.group(1))
+                current_entry = None
+
+        # Return the requested entry
+        entry_idx = int(entry_num)
+        if 0 <= entry_idx < len(menu_entries):
+            return menu_entries[entry_idx]
+
+        return None
+    except (OSError, IOError, ValueError, IndexError):
+        return None
+
+
+def _detect_newer_kernel():
+    '''Detect if there's a newer kernel package than the current running one'''
+    try:
+        current_kernel = os.uname().release
+
+        # Check for newer kernel packages in /boot
+        boot_dir = '/boot'
+        if not os.path.exists(boot_dir):
+            return None
+
+        kernel_versions = []
+        for item in os.listdir(boot_dir):
+            if item.startswith('vmlinuz-') and item != 'vmlinuz':
+                kernel_versions.append(item.replace('vmlinuz-', ''))
+
+        if not kernel_versions:
+            return None
+
+        # Sort versions and find the newest
+        # Simple version comparison (this could be improved with proper semver parsing)
+        kernel_versions.sort()
+        newest_kernel = kernel_versions[-1]
+
+        # Only return if it's different from current
+        if newest_kernel != current_kernel:
+            return newest_kernel
+
+        return None
+    except (OSError, IOError):
+        return None
+
+
+def _get_actual_grub_default():
+    '''Get the actual grub default entry by checking grub configuration'''
+    try:
+        # Check if GRUB_DEFAULT is set to a specific value
+        grub_default_path = '/etc/default/grub'
+        if not os.path.exists(grub_default_path):
+            return None
+
+        with open(grub_default_path, 'r') as f:
+            for line in f:
+                if line.startswith('GRUB_DEFAULT='):
+                    default_val = line.split('=', 1)[1].strip().strip('"\'')
+
+                    # Handle different GRUB_DEFAULT values
+                    if default_val == '0':
+                        # First entry (most common for Ubuntu)
+                        return _get_kernel_from_grub_entry('0')
+                    elif default_val == 'saved':
+                        # Check grubenv for saved entry
+                        grubenv_path = '/boot/grub/grubenv'
+                        if os.path.exists(grubenv_path):
+                            with open(grubenv_path, 'r') as f2:
+                                for env_line in f2:
+                                    if env_line.startswith('saved_entry='):
+                                        entry_num = env_line.split('=', 1)[1].strip()
+                                        return _get_kernel_from_grub_entry(entry_num)
+                    elif default_val.isdigit():
+                        # Numeric entry
+                        return _get_kernel_from_grub_entry(default_val)
+                    elif 'vmlinuz-' in default_val:
+                        # Direct kernel path
+                        match = re.search(r'vmlinuz-([^\s]+)', default_val)
+                        if match:
+                            return match.group(1)
+                    break
+
+        # If GRUB_DEFAULT is not explicitly set, Ubuntu typically defaults to 0
+        return _get_kernel_from_grub_entry('0')
+
+    except (OSError, IOError):
+        return None
+
+
+def _resolve_nvidia_module_path_for_kernel(kernel_version):
+    """Return the path to the NVIDIA kernel module for a given kernel version, if present.
+
+    Tries standard, DKMS, and other possible locations and compressed variants.
+    """
+    import os
+
+    if not kernel_version:
+        return None
+
+    glob_pattern = f'/lib/modules/{kernel_version}/kernel/nvidia*'
+    for nvidia_dir in glob.glob(glob_pattern):
+        if os.path.isdir(nvidia_dir):
+            for module_file in ['nvidia.ko', 'nvidia.ko.gz', 'nvidia.ko.zst']:
+                path = os.path.join(nvidia_dir, module_file)
+                if os.path.exists(path):
+                    return path
+
+    possible_paths = [
+        # Standard kernel module path
+        f'/lib/modules/{kernel_version}/kernel/drivers/video/nvidia.ko',
+        # Compressed standard module
+        f'/lib/modules/{kernel_version}/kernel/drivers/video/nvidia.ko.gz',
+        # DKMS module paths (common for NVIDIA drivers)
+        f'/lib/modules/{kernel_version}/updates/dkms/nvidia.ko',
+        f'/lib/modules/{kernel_version}/updates/dkms/nvidia.ko.gz',
+        f'/lib/modules/{kernel_version}/updates/dkms/nvidia.ko.zst',
+        # Alternative DKMS paths
+        f'/lib/modules/{kernel_version}/updates/nvidia.ko',
+        f'/lib/modules/{kernel_version}/updates/nvidia.ko.gz',
+        f'/lib/modules/{kernel_version}/updates/nvidia.ko.zst',
+        # Additional distribution-specific paths
+        f'/lib/modules/{kernel_version}/extra/nvidia.ko',
+        f'/lib/modules/{kernel_version}/extra/nvidia.ko.gz',
+        f'/lib/modules/{kernel_version}/extra/nvidia.ko.zst',
+        # Directory scans
+        f'/lib/modules/{kernel_version}/updates/dkms/',
+        f'/lib/modules/{kernel_version}/updates/',
+        f'/lib/modules/{kernel_version}/extra/',
+        f'/lib/modules/{kernel_version}/kernel/',
+    ]
+
+    for path in possible_paths:
+        if os.path.exists(path):
+            if path.endswith('/'):
+                try:
+                    for filename in os.listdir(path):
+                        if filename.startswith('nvidia.ko'):
+                            return os.path.join(path, filename)
+                except (OSError, IOError):
+                    continue
+            else:
+                return path
+
+    return None
+
+
+def check_nvidia_module_status():
+    '''Check NVIDIA module status and kernel compatibility.
+
+    Returns:
+        dict: Contains information about NVIDIA module status:
+            - 'loaded': bool - Whether nvidia module is currently loaded
+            - 'current_module_path': str or None - Path to current nvidia module
+            - 'next_boot_kernel': str or None - Next boot kernel version
+            - 'next_boot_module_path': str or None - Path to nvidia module for next boot kernel
+            - 'needs_reboot': bool - Whether a reboot is needed
+            - 'module_missing': bool - Whether nvidia module is missing for next boot kernel
+    '''
+    import subprocess
+    import os
+    import re
+
+    result = {
+        'loaded': False,
+        'current_module_path': None,
+        'next_boot_kernel': None,
+        'next_boot_module_path': None,
+        'needs_reboot': False,
+        'module_missing': False
+    }
+
+    # Check if nvidia module is loaded
+    try:
+        lsmod_output = subprocess.check_output(['lsmod'], universal_newlines=True)
+        result['loaded'] = 'nvidia' in lsmod_output
+    except (subprocess.CalledProcessError, FileNotFoundError):
+        pass
+
+    # Get current nvidia module info if loaded
+    if result['loaded']:
+        try:
+            modinfo_output = subprocess.check_output(['modinfo', 'nvidia'], universal_newlines=True)
+            for line in modinfo_output.splitlines():
+                if line.startswith('filename:'):
+                    result['current_module_path'] = line.split(':', 1)[1].strip()
+                    break
+        except (subprocess.CalledProcessError, FileNotFoundError):
+            pass
+
+    # Get next boot kernel version using multiple methods
+    try:
+        # Method 1: Check grub environment variables (most reliable)
+        grubenv_path = '/boot/grub/grubenv'
+        if os.path.exists(grubenv_path):
+            try:
+                with open(grubenv_path, 'r') as f:
+                    grubenv_content = f.read()
+                    # Look for next_entry or saved_entry
+                    for line in grubenv_content.splitlines():
+                        if line.startswith('next_entry='):
+                            entry_num = line.split('=', 1)[1].strip()
+                            # Convert entry number to kernel name
+                            result['next_boot_kernel'] = _get_kernel_from_grub_entry(entry_num)
+                            break
+                        elif line.startswith('saved_entry='):
+                            entry_num = line.split('=', 1)[1].strip()
+                            result['next_boot_kernel'] = _get_kernel_from_grub_entry(entry_num)
+                            break
+            except (OSError, IOError):
+                pass
+
+        # Method 2: Check /etc/default/grub for GRUB_DEFAULT
+        if not result['next_boot_kernel']:
+            grub_default_path = '/etc/default/grub'
+            if os.path.exists(grub_default_path):
+                try:
+                    with open(grub_default_path, 'r') as f:
+                        for line in f:
+                            if line.startswith('GRUB_DEFAULT='):
+                                default_val = line.split('=', 1)[1].strip().strip('"\'')
+                                if default_val == 'saved':
+                                    # If GRUB_DEFAULT=saved, check grubenv again
+                                    if os.path.exists(grubenv_path):
+                                        with open(grubenv_path, 'r') as f2:
+                                            for env_line in f2:
+                                                if env_line.startswith('saved_entry='):
+                                                    entry_num = env_line.split('=', 1)[1].strip()
+                                                    result['next_boot_kernel'] = _get_kernel_from_grub_entry(entry_num)
+                                                    break
+                                elif default_val.isdigit():
+                                    # If it's a number, convert to kernel name
+                                    result['next_boot_kernel'] = _get_kernel_from_grub_entry(default_val)
+                                elif 'vmlinuz-' in default_val:
+                                    # If it's a kernel path, extract version
+                                    match = re.search(r'vmlinuz-([^\s]+)', default_val)
+                                    if match:
+                                        result['next_boot_kernel'] = match.group(1)
+                                break
+                except (OSError, IOError):
+                    pass
+
+        # Method 3: Check for newer kernel packages than current
+        if not result['next_boot_kernel']:
+            result['next_boot_kernel'] = _detect_newer_kernel()
+
+        # Method 4: Check actual grub default entry (most accurate for Ubuntu)
+        if not result['next_boot_kernel']:
+            result['next_boot_kernel'] = _get_actual_grub_default()
+
+        # Method 5: Fallback to grub.cfg first entry (less reliable)
+        if not result['next_boot_kernel']:
+            grub_cfg = '/boot/grub/grub.cfg'
+            if os.path.exists(grub_cfg):
+                with open(grub_cfg, 'r') as f:
+                    grub_content = f.read()
+                    # Look for the first linux entry
+                    match = re.search(r'linux\s+/boot/vmlinuz-([^\s]+)', grub_content)
+                    if match:
+                        result['next_boot_kernel'] = match.group(1)
+
+        # Method 6: Fallback to /proc/cmdline
+        if not result['next_boot_kernel']:
+            with open('/proc/cmdline', 'r') as f:
+                cmdline = f.read()
+                match = re.search(r'BOOT_IMAGE=/boot/vmlinuz-([^\s]+)', cmdline)
+                if match:
+                    result['next_boot_kernel'] = match.group(1)
+
+        # Final fallback: assume current running kernel
+        if not result['next_boot_kernel']:
+            result['next_boot_kernel'] = os.uname().release
+
+    except (OSError, IOError):
+        # Fallback to current kernel
+        result['next_boot_kernel'] = os.uname().release
+
+    # Centralized post-processing: compute needs_reboot and always resolve next boot module path
+    current_kernel = os.uname().release
+    result['needs_reboot'] = bool(result['next_boot_kernel'] and result['next_boot_kernel'] != current_kernel)
+
+    # Always try to resolve the next boot module path (even if kernels match)
+    next_path = _resolve_nvidia_module_path_for_kernel(result['next_boot_kernel'])
+    if next_path:
+        result['next_boot_module_path'] = next_path
+    else:
+        # Only flag as missing if a reboot will happen and we could not find a module for that kernel
+        if result['needs_reboot']:
+            result['module_missing'] = True
+            # Optional: provide debug context
+            result['debug_info'] = {
+                'checked_kernel': result['next_boot_kernel']
+            }
+
+    return result
