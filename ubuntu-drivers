@@ -295,6 +295,8 @@ def install_gpgpu(args):
                     to_install.append(lrm_meta)
                     to_install.remove(p)
                 break
+            if not cache[candidate].current_ver:
+                break
 
     if not to_install:
         print('All the available drivers are already installed.')

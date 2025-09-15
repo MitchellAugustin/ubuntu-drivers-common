@@ -1,3 +1,9 @@
+ubuntu-drivers-common (1:0.10.3+resolverbug) questing; urgency=medium
+
+  * Fix resolver bug
+
+ -- Mitchell Augustin <mitchell.augustin@canonical.com>  Mon, 15 Sep 2025 09:54:58 -0500
+
 ubuntu-drivers-common (1:0.10.3) questing; urgency=medium
 
   [ Mitchell Augustin ]

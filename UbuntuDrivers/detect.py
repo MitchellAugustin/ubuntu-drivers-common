@@ -1062,6 +1062,8 @@ def get_desktop_package_list(
                     break
             except KeyError:
                 pass
+            if candidate and not cache[candidate].current_ver:
+                break
 
     return to_install
 
