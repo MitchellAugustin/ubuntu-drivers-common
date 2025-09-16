@@ -20,6 +20,7 @@ import apt_pkg
 
 from UbuntuDrivers import kerneldetection
 from functools import cmp_to_key
+from typing import List, Set, Dict
 
 system_architecture = ''
 lookup_cache = {}
@@ -150,6 +151,77 @@ def system_modaliases(sys_path=None):
 
     return aliases
 
+def _get_package_conflicts_apt_pkg(
+    package_name: str, 
+    cache: apt_pkg.Cache, 
+    conflicts_cache: Dict[str, Set[str]]
+) -> Set[str]:
+    """
+    A helper function to get a package's conflicts using the python-apt_pkg API.
+    Uses a passed-in dictionary for caching.
+    """
+    # Use the passed-in dictionary for caching.
+    if package_name in conflicts_cache:
+        return conflicts_cache[package_name]
+
+    conflicts: Set[str] = set()
+    try:
+        pkg = cache[package_name]
+        version = pkg.candidate
+        if not version:
+            conflicts_cache[package_name] = set()
+            return set()
+
+        for or_group in version.conflicts:
+            for dep in or_group:
+                conflicts.add(dep.target_pkg.name)
+
+    except KeyError:
+        print(f"  Warning: Package '{package_name}' not found in apt cache.")
+    except Exception as e:
+        print(f" Error processing dependencies for '{package_name}': {e}")
+
+    # Store the result in the passed-in cache.
+    conflicts_cache[package_name] = conflicts
+    return conflicts
+
+
+def filter_conflicting_drivers(driver_list: List[str]) -> List[str]:
+    """
+    Filters a list of drivers using the apt_pkg library, removing any
+    that conflict with a package appearing earlier in the list.
+
+    This function is self-contained and does not rely on global variables.
+    """
+    try:
+        apt_pkg.init_system()
+        apt_cache = apt_pkg.Cache()
+    except Exception as e:
+        print(f"Critical Error: Could not initialize apt_pkg. Is 'python3-apt' installed?")
+        print(f"   Details: {e}")
+        return driver_list
+
+    # The cache is now a local variable, encapsulated within this function's scope.
+    conflicts_cache: Dict[str, Set[str]] = {}
+    packages_to_remove: Set[str] = set()
+
+    for i, pkg1_name in enumerate(driver_list):
+        if pkg1_name in packages_to_remove:
+            continue
+
+        # Pass the local cache to the helper function.
+        conflicts_of_pkg1 = _get_package_conflicts_apt_pkg(pkg1_name, apt_cache, conflicts_cache)
+
+        if not conflicts_of_pkg1:
+            continue
+
+        for pkg2_name in driver_list[i + 1:]:
+            if pkg2_name in conflicts_of_pkg1:
+                print(f"Found conflict: '{pkg1_name}' conflicts with '{pkg2_name}'. Keeping '{pkg1_name}'.")
+                packages_to_remove.add(pkg2_name)
+
+    filtered_list = [pkg for pkg in driver_list if pkg not in packages_to_remove]
+    return filtered_list
 
 def _check_video_abi_compat(apt_cache, package):
     xorg_video_abi = None
@@ -1062,8 +1134,9 @@ def get_desktop_package_list(
                     break
             except KeyError:
                 pass
-            if candidate and not cache[candidate].current_ver:
-                break
+#            if candidate and not cache[candidate].current_ver:
+#                break
+    to_install = filter_conflicting_drivers(to_install)
 
     return to_install
 
