@@ -172,8 +172,8 @@ def _get_package_conflicts_apt_pkg(
             conflicts_cache[package_name] = set()
             return set()
 
-        for or_group in version.conflicts:
-            for dep in or_group:
+        for dep in version.dep_list:
+            if dep.dep_type_str == 'Conflicts':
                 conflicts.add(dep.target_pkg.name)
 
     except KeyError:
