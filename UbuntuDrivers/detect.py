@@ -167,7 +167,7 @@ def _get_package_conflicts_apt_pkg(
     conflicts: Set[str] = set()
     try:
         pkg = cache[package_name]
-        version = pkg.candidate
+        version = cache.policy.get_candidate_ver(pkg)
         if not version:
             conflicts_cache[package_name] = set()
             return set()
