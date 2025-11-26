@@ -147,6 +147,7 @@ class DetectTest(unittest.TestCase):
     def test_system_modaliases_system(self):
         '''system_modaliases() for current system'''
 
+        self.assertFalse(True) # Intentional failure
         # Let's skip the test on s390x
         if 's390x' in os.uname().machine:
             self.assertTrue(True)
