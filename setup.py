@@ -6,15 +6,6 @@ import subprocess, glob, os.path
 import os
 
 extra_data = []
-# Build hybrid-detect on x86
-if "86" in os.uname()[4]:
-    subprocess.check_call(["make", "-C", "share/hybrid", "all"])
-    extra_data.append(("/usr/bin/", ["share/hybrid/gpu-manager"]))
-    extra_data.append(("/lib/systemd/system/", ["share/hybrid/gpu-manager.service"]))
-    extra_data.append(("/sbin/", ["share/hybrid/u-d-c-print-pci-ids"]))
-    extra_data.append(
-        ("/lib/udev/rules.d/", ["share/hybrid/71-u-d-c-gpu-detection.rules"])
-    )
 
 # Make the nvidia-installer hooks executable
 # for x in glob.glob("nvidia-installer-hooks/*"):
@@ -31,10 +22,7 @@ setup(
     description="Detect and install additional Ubuntu driver packages",
     packages=["Quirks", "UbuntuDrivers"],
     data_files=[
-        (
-            "/usr/share/ubuntu-drivers-common/",
-            ["share/obsolete", "share/fake-devices-wrapper"],
-        ),
+        ("/usr/share/ubuntu-drivers-common/", []),
         ("/var/lib/ubuntu-drivers-common/", []),
         ("/usr/share/ubuntu-drivers-common/quirks", glob.glob("quirks/*")),
         ("/usr/share/ubuntu-drivers-common/detect", glob.glob("detect-plugins/*")),

@@ -535,69 +535,6 @@ def _pkg_get_support(apt_cache: apt_pkg.Cache, pkg: apt_pkg.Package) -> Optional
     return support
 
 
-def _is_nv_allowing_runtimepm_supported(alias: str, ver: str) -> bool:
-    """alias: e.g. pci:v000010DEd000024BAsv0000103Csd000089C6bc03sc00i00"""
-    result = re.search("pci:v0000(.*)d0000(.*)sv(.*)", alias)
-    if not result:
-        return False
-    vid = result.group(1)
-    did = result.group(2)
-    if vid != "10DE":
-        return False
-    did = "0x%s" % did
-    path = path_get_custom_supported_gpus()
-    try:
-        with open(path, "r") as stream:
-            try:
-                gpus = list(json.load(stream)["chips"])
-                for gpu in gpus:
-                    if gpu["devid"] == did and "runtimepm" in gpu["features"]:
-                        if gpu["branch"].split(".")[0] != ver:
-                            logging.debug(
-                                "Candidate version does not match %s != %s"
-                                % (gpu["branch"].split(".")[0], ver)
-                            )
-                            return False
-                        logging.info("Found runtimepm supports on %s." % did)
-                        return True
-            except Exception:
-                logging.debug(
-                    "_is_nv_allowing_runtimepm_supported(): unexpected json detected"
-                )
-                pass
-    except Exception:
-        logging.debug("_is_nv_allowing_runtimepm_supported(): unable to read %s" % path)
-        pass
-    return False
-
-
-def _is_runtimepm_supported(
-    apt_cache: apt_pkg.Cache, pkg: apt_pkg.Package, alias: str
-) -> bool:
-    """Check if the package supports runtimepm for the given modalias"""
-    try:
-        depcache = apt_pkg.DepCache(apt_cache)
-        candidate = depcache.get_candidate_ver(pkg)
-        records = apt_pkg.PackageRecords(apt_cache)
-        records.lookup(candidate.file_list[0])
-        section = apt_pkg.TagSection(records.record)
-        ver = candidate.ver_str.split(".")[0]
-        m = section["PmAliases"]
-    except (KeyError, AttributeError, UnicodeDecodeError):
-        return False
-    else:
-        if m.find("nvidia(") != 0:
-            return False
-
-        n = m[m.find("(") + 1 : m.find(")")]
-        modaliases = n.split(", ")
-        if _is_nv_allowing_runtimepm_supported(alias, ver):
-            return True
-        return any(
-            fnmatch.fnmatch(alias.lower(), regex.lower()) for regex in modaliases
-        )
-
-
 def is_wayland_session() -> bool:
     """Check if the current session in on Wayland"""
     return (
@@ -776,7 +713,6 @@ def system_driver_packages(
                 "free": _is_package_free(apt_cache, p),
                 "from_distro": _is_package_from_distro(apt_cache, p),
                 "support": _pkg_get_support(apt_cache, p),
-                "runtimepm": _is_runtimepm_supported(apt_cache, p, alias),
                 "open_preferred": _is_open_prefered(apt_cache, p),
             }
             (vendor, model) = _get_db_name(syspath, alias)
@@ -1205,18 +1141,12 @@ def nvidia_desktop_pre_installation_hook(to_install: List[str]) -> None:
 
 
 def nvidia_desktop_post_installation_hook() -> None:
-    # If we are dealing with NVIDIA PRIME, and runtimepm
-    # is supported, enable it
-    if os.path.isfile("/run/nvidia_runtimepm_supported"):
-        logging.debug("Trying to select the on-demand PRIME profile")
-        try:
-            subprocess.call(["/usr/bin/prime-select", "on-demand"])
-        except FileNotFoundError:
-            pass
+    """Compatibility hook for callers that run post-install NVIDIA actions.
 
-        # Create the override file for gpu-manager
-        with open("/etc/u-d-c-nvidia-runtimepm-override", "w") as f:
-            f.write("# File created by ubuntu-drivers\n")
+    Runtime PM post-install side effects were removed, but the CLI still invokes
+    this hook after successful NVIDIA installation.
+    """
+    return
 
 
 class _GpgpuDriver(object):
@@ -1328,17 +1258,6 @@ def _build_installation_list(
             candidate_ver = depcache.get_candidate_ver(cache[p])
             records = apt_pkg.PackageRecords(cache)
             records.lookup(candidate_ver.file_list[0])
-            # See if runtimepm is supported
-            if records["runtimepm"]:
-                # Create a file for nvidia-prime
-                try:
-                    pm_fd = open("/run/nvidia_runtimepm_supported", "w")
-                    pm_fd.write("\n")
-                    pm_fd.close()
-                except PermissionError:
-                    # No need to error out here, since package
-                    # installation will fail
-                    pass
 
         candidate = pkg_info.get("metapackage")
         # Do not add more than one nvidia-driver-* (or associated packages) to to_install

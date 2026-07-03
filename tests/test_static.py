@@ -65,8 +65,6 @@ class TestStatic(unittest.TestCase):
         ignore_files = [
             "settings.py",
             "setup.py",
-            # Project files ignores for the moment
-            "tests/gpu-manager.py",
         ]
 
         paths = []
