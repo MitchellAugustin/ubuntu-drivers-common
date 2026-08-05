@@ -19,7 +19,7 @@ import logging
 
 # from gi.repository import GLib
 from gi.repository import UMockdev
-from unittest.mock import patch
+from unittest.mock import patch, mock_open, Mock
 import apt_pkg
 import aptdaemon.test
 
@@ -6583,6 +6583,177 @@ exec /sbin/modinfo "$@"
         self.assertEqual(
             set(UbuntuDrivers.detect.auto_install_filter(None, True, pkgs)),
             set(["bcmwl-kernel-source", "nvidia-173"]),
+        )
+
+    @patch.dict(os.environ, {"container": "lxc"}, clear=False)
+    def test_is_lxc_container_from_environment(self):
+        """is_lxc_container() detects container via environment variable."""
+
+        self.assertTrue(UbuntuDrivers.detect.is_lxc_container())
+
+    @patch(
+        "UbuntuDrivers.detect.open", new_callable=mock_open, read_data="535.183.01\n"
+    )
+    def test_get_host_nvidia_kernel_module_major_version(self, mocked_open):
+        """get_host_nvidia_kernel_module_major_version() parses module version."""
+
+        major = UbuntuDrivers.detect.get_host_nvidia_kernel_module_major_version()
+
+        self.assertEqual(major, 535)
+        mocked_open.assert_called_with("/sys/module/nvidia/version", "r")
+
+    def test_filter_nvidia_userspace_packages_for_lxc(self):
+        """filter_nvidia_userspace_packages_for_lxc() keeps only matching userspace."""
+
+        packages = [
+            "bcmwl-kernel-source",
+            "nvidia-driver-535",
+            "nvidia-headless-no-dkms-535",
+            "nvidia-kernel-common-535",
+            "nvidia-kernel-source-535",
+            "linux-modules-nvidia-535-generic",
+            "nvidia-dkms-535",
+            "libnvidia-gl-535",
+            "nvidia-compute-utils-535",
+            "xserver-xorg-video-nvidia-535",
+            "nvidia-driver-570",
+            "libnvidia-gl-570",
+        ]
+
+        filtered = UbuntuDrivers.detect.filter_nvidia_userspace_packages_for_lxc(
+            packages,
+            535,
+        )
+
+        self.assertEqual(
+            filtered,
+            [
+                "bcmwl-kernel-source",
+                "libnvidia-gl-535",
+                "nvidia-compute-utils-535",
+                "xserver-xorg-video-nvidia-535",
+            ],
+        )
+
+    @patch("UbuntuDrivers.detect.apt_pkg.DepCache")
+    def test_expand_nvidia_userspace_packages_for_lxc(self, mock_depcache):
+        """expand_nvidia_userspace_packages_for_lxc() expands metas into userspace deps only."""
+
+        class FakePackage(object):
+            def __init__(self, depends):
+                self.depends = depends
+
+        def get_candidate_ver(package):
+            candidate = Mock()
+            candidate.depends_list_str = {
+                "Depends": [[(dependency, "", "")] for dependency in package.depends]
+            }
+            return candidate
+
+        mock_depcache.return_value.get_candidate_ver.side_effect = get_candidate_ver
+
+        apt_cache = {
+            "nvidia-driver-580-open": FakePackage(
+                [
+                    "libnvidia-gl-580",
+                    "nvidia-dkms-580-open",
+                    "nvidia-kernel-common-580",
+                    "nvidia-kernel-source-580-open",
+                    "nvidia-compute-utils-580",
+                    "xserver-xorg-video-nvidia-580",
+                ]
+            ),
+            "nvidia-headless-no-dkms-580-open": FakePackage(
+                [
+                    "nvidia-kernel-common-580",
+                    "nvidia-kernel-source-580-open",
+                    "libnvidia-compute-580",
+                    "nvidia-compute-utils-580",
+                    "libnvidia-cfg1-580",
+                ]
+            ),
+        }
+
+        expanded = UbuntuDrivers.detect.expand_nvidia_userspace_packages_for_lxc(
+            apt_cache,
+            [
+                "nvidia-driver-580-open",
+                "nvidia-headless-no-dkms-580-open",
+            ],
+            580,
+        )
+
+        self.assertEqual(
+            expanded,
+            [
+                "libnvidia-gl-580",
+                "nvidia-compute-utils-580",
+                "xserver-xorg-video-nvidia-580",
+                "libnvidia-compute-580",
+                "libnvidia-cfg1-580",
+            ],
+        )
+
+    @patch("UbuntuDrivers.detect.apt_pkg.DepCache")
+    def test_packages_require_lxc_excluded_nvidia_dependencies(self, mock_depcache):
+        """packages_require_lxc_excluded_nvidia_dependencies() finds forbidden deps."""
+
+        class FakePackage(object):
+            def __init__(self, depends):
+                self.depends = depends
+
+        def get_candidate_ver(package):
+            candidate = Mock()
+            candidate.depends_list_str = {
+                "Depends": [[(dependency, "", "")] for dependency in package.depends]
+            }
+            return candidate
+
+        mock_depcache.return_value.get_candidate_ver.side_effect = get_candidate_ver
+
+        apt_cache = {
+            "libnvidia-gl-580": FakePackage(
+                ["nvidia-kernel-common-580", "libnvidia-compute-580"]
+            ),
+            "libnvidia-compute-580": FakePackage(["nvidia-kernel-common-580"]),
+            "nvidia-kernel-common-580": FakePackage(["nvidia-firmware-580-580.173.02"]),
+        }
+
+        required = (
+            UbuntuDrivers.detect.packages_require_lxc_excluded_nvidia_dependencies(
+                apt_cache,
+                ["libnvidia-gl-580"],
+                580,
+            )
+        )
+
+        self.assertEqual(required, ["nvidia-kernel-common-580"])
+
+    def test_filter_nvidia_packages_by_major_version(self):
+        """filter_nvidia_packages_by_major_version() drops other NVIDIA branches."""
+
+        packages = {
+            "bcmwl-kernel-source": {},
+            "nvidia-driver-580": {"recommended": False},
+            "nvidia-driver-580-open": {"recommended": True},
+            "nvidia-driver-595-open": {"recommended": True},
+            "nvidia-driver-595-server": {"recommended": False},
+        }
+
+        filtered = UbuntuDrivers.detect.filter_nvidia_packages_by_major_version(
+            packages,
+            580,
+        )
+
+        self.assertEqual(
+            set(filtered),
+            set(
+                [
+                    "bcmwl-kernel-source",
+                    "nvidia-driver-580",
+                    "nvidia-driver-580-open",
+                ]
+            ),
         )
 
     def test_gpgpu_install_filter(self):

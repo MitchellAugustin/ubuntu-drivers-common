@@ -21,7 +21,7 @@
 import xkit.xutils
 import xkit.xorgparser
 import Quirks.quirkinfo
-from typing import Optional, Dict, List, Any
+from typing import Optional, Dict, List, Any, Union, TextIO
 
 import tempfile
 import os
@@ -46,29 +46,27 @@ class Quirk:
 
 class ReadQuirk:
 
-    def __init__(self, source: Optional[str] = None) -> None:
+    def __init__(self, source: Optional[Union[str, TextIO]] = None) -> None:
         self.source = source
 
         # See if the source is a file or a file object
         # and act accordingly
         file = self.source
         lines_list: List[str] = []
-        if file == None:
+        if file is None:
             lines_list = []
         else:
-            if not hasattr(file, "write"):  # it is a file
-                if isinstance(file, str):
-                    myfile = open(file, "r", encoding="utf-8")
-                    try:
-                        lines_list = myfile.readlines()
-                        myfile.close()
-                    except UnicodeDecodeError:
-                        lines_list = []
+            if isinstance(file, str):
+                myfile = open(file, "r", encoding="utf-8")
+                try:
+                    lines_list = myfile.readlines()
                     myfile.close()
+                except UnicodeDecodeError:
+                    lines_list = []
+                myfile.close()
             else:
                 # it is a file object
-                if hasattr(file, "readlines"):
-                    lines_list = file.readlines()  # type: ignore[union-attr]
+                lines_list = file.readlines()
 
         inside_quirk = False
         has_id = False

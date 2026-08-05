@@ -63,6 +63,257 @@ lookup_cache = {}
 custom_supported_gpus_json = "/etc/custom_supported_gpus.json"
 
 
+def is_lxc_container() -> bool:
+    """Return True when running inside an LXC/LXD container."""
+    container_type = os.environ.get("container", "").strip().lower()
+    if container_type in ("lxc", "lxd"):
+        return True
+
+    for path in ("/run/systemd/container", "/proc/1/environ"):
+        try:
+            with open(path, "rb") as f:
+                content = f.read().decode("utf-8", errors="ignore").lower()
+            if "lxc" in content or "lxd" in content or "container=lxc" in content:
+                return True
+        except OSError:
+            continue
+
+    try:
+        detect_virt = subprocess.Popen(
+            ["systemd-detect-virt", "--container"],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            universal_newlines=True,
+        )
+        output, _ = detect_virt.communicate()
+        if detect_virt.returncode == 0 and output.strip() in ("lxc", "lxd"):
+            return True
+    except OSError:
+        pass
+
+    return False
+
+
+def get_host_nvidia_kernel_module_major_version() -> Optional[int]:
+    """Return host NVIDIA kernel module major version as seen from this environment."""
+
+    def _extract_major(value: str) -> Optional[int]:
+        match = re.search(r"([0-9]{3})", value)
+        if not match:
+            return None
+        try:
+            return int(match.group(1))
+        except (TypeError, ValueError):
+            return None
+
+    for path in ("/sys/module/nvidia/version", "/proc/driver/nvidia/version"):
+        try:
+            with open(path, "r") as f:
+                content = f.read().strip()
+                major = _extract_major(content)
+                if major is not None:
+                    return major
+        except OSError:
+            continue
+
+    try:
+        modinfo = subprocess.Popen(
+            ["modinfo", "-F", "version", "nvidia"],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            universal_newlines=True,
+        )
+        output, _ = modinfo.communicate()
+        if modinfo.returncode == 0:
+            return _extract_major(output)
+    except OSError:
+        pass
+
+    return None
+
+
+def _is_nvidia_kernel_module_package(package_name: str) -> bool:
+    """Return True for package names that install NVIDIA kernel module bits."""
+    return package_name.startswith(
+        (
+            "linux-modules-nvidia-",
+            "linux-objects-nvidia-",
+            "nvidia-dkms-",
+            "nvidia-kernel-common-",
+            "nvidia-kernel-source-",
+            "nvidia-firmware-",
+        )
+    )
+
+
+def _is_nvidia_userspace_metapackage(package_name: str) -> bool:
+    """Return True for NVIDIA metapackages that should not be installed in LXC."""
+    return package_name.startswith(("nvidia-driver-", "nvidia-headless-no-dkms-"))
+
+
+def get_nvidia_package_major_version(package_name: str) -> Optional[int]:
+    """Extract the NVIDIA branch major version from a package name."""
+    nvidia_info = NvidiaPkgNameInfo(package_name)
+    if nvidia_info.is_valid:
+        return nvidia_info.get_major_version()
+
+    match = re.search(
+        r"nvidia(?:-[a-z0-9]+)*-([0-9]{3})(?:-(?:server|open|server-open))?(?:$|[^0-9])",
+        package_name,
+    )
+    if not match:
+        return None
+
+    try:
+        return int(match.group(1))
+    except (TypeError, ValueError):
+        return None
+
+
+def _is_lxc_excluded_nvidia_package(package_name: str) -> bool:
+    """Return True for NVIDIA packages that should never be installed inside LXC."""
+    return _is_nvidia_kernel_module_package(
+        package_name
+    ) or _is_nvidia_userspace_metapackage(package_name)
+
+
+def _get_package_dependencies(apt_cache: apt_pkg.Cache, package_name: str) -> List[str]:
+    """Return direct Depends package names for the candidate version of a package."""
+    dependencies: List[str] = []
+    depcache = apt_pkg.DepCache(apt_cache)
+
+    try:
+        candidate = depcache.get_candidate_ver(apt_cache[package_name])
+    except KeyError:
+        return dependencies
+
+    if not candidate:
+        return dependencies
+
+    try:
+        depends_list_str = getattr(candidate, "depends_list_str", {})
+        for dep_list in depends_list_str.get("Depends", []):
+            if dep_list:
+                dependencies.append(dep_list[0][0])
+    except (AttributeError, KeyError, TypeError):
+        return dependencies
+
+    return dependencies
+
+
+def expand_nvidia_userspace_packages_for_lxc(
+    apt_cache: apt_pkg.Cache, packages: List[str], expected_major_version: int
+) -> List[str]:
+    """Expand NVIDIA metapackages into userspace dependencies for LXC installs."""
+    expanded: List[str] = []
+
+    for package_name in packages:
+        package_major = get_nvidia_package_major_version(package_name)
+
+        if package_major is None and "nvidia" not in package_name:
+            expanded.append(package_name)
+            continue
+
+        if _is_lxc_excluded_nvidia_package(package_name):
+            for dependency in _get_package_dependencies(apt_cache, package_name):
+                dependency_major = get_nvidia_package_major_version(dependency)
+                if (
+                    dependency_major is not None
+                    and dependency_major != expected_major_version
+                ):
+                    continue
+                if _is_lxc_excluded_nvidia_package(dependency):
+                    continue
+                expanded.append(dependency)
+            continue
+
+        if package_major is None or package_major == expected_major_version:
+            expanded.append(package_name)
+
+    deduplicated: List[str] = []
+    for package_name in expanded:
+        if package_name not in deduplicated:
+            deduplicated.append(package_name)
+
+    return deduplicated
+
+
+def packages_require_lxc_excluded_nvidia_dependencies(
+    apt_cache: apt_pkg.Cache, packages: List[str], expected_major_version: int
+) -> List[str]:
+    """Return LXC-excluded NVIDIA dependencies required by the given package set."""
+    required: List[str] = []
+    pending: List[str] = list(packages)
+    seen: Set[str] = set()
+
+    while pending:
+        package_name = pending.pop(0)
+        if package_name in seen:
+            continue
+        seen.add(package_name)
+
+        for dependency in _get_package_dependencies(apt_cache, package_name):
+            dependency_major = get_nvidia_package_major_version(dependency)
+            if (
+                dependency_major is not None
+                and dependency_major != expected_major_version
+            ):
+                continue
+
+            if _is_lxc_excluded_nvidia_package(dependency):
+                if dependency not in required:
+                    required.append(dependency)
+                continue
+
+            if dependency_major is not None or "nvidia" in dependency:
+                pending.append(dependency)
+
+    return required
+
+
+def filter_nvidia_userspace_packages_for_lxc(
+    packages: List[str], expected_major_version: int
+) -> List[str]:
+    """Filter a package list to userspace NVIDIA packages matching the host module major."""
+    filtered: List[str] = []
+
+    for package_name in packages:
+        if _is_lxc_excluded_nvidia_package(package_name):
+            continue
+
+        package_major = get_nvidia_package_major_version(package_name)
+        if package_major is None and "nvidia" not in package_name:
+            filtered.append(package_name)
+            continue
+
+        if package_major is None:
+            filtered.append(package_name)
+            continue
+
+        if package_major == expected_major_version:
+            filtered.append(package_name)
+
+    return filtered
+
+
+def filter_nvidia_packages_by_major_version(
+    packages: Dict[str, PackageInfo], expected_major_version: int
+) -> Dict[str, PackageInfo]:
+    """Keep only NVIDIA package candidates matching the requested branch version."""
+    filtered: Dict[str, PackageInfo] = {}
+
+    for package_name, package_info in packages.items():
+        package_major = get_nvidia_package_major_version(package_name)
+        if package_major is None:
+            filtered[package_name] = package_info
+            continue
+
+        if package_major == expected_major_version:
+            filtered[package_name] = package_info
+
+    return filtered
+
+
 class NvidiaPkgNameInfo(object):
     """Class to process NVIDIA package names"""
 

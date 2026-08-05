@@ -17,7 +17,7 @@ import sys
 import os
 import logging
 import apt_pkg
-from typing import Optional, Any, Dict
+from typing import Optional, Any, Dict, List, Tuple
 
 from functools import cmp_to_key
 import UbuntuDrivers.detect
@@ -49,6 +49,117 @@ class Config(object):
 
 
 pass_config = click.make_pass_decorator(Config, ensure=True)
+
+
+def _apply_lxc_nvidia_package_policy(
+    apt_cache: apt_pkg.Cache,
+    args: Config,
+    to_install: List[str],
+    gpgpu: bool = False,
+) -> Tuple[List[str], Optional[str]]:
+    """Apply LXC-specific NVIDIA package restrictions."""
+
+    def _is_nvidia_candidate(package_name: str) -> bool:
+        if package_name.startswith(("linux-modules-nvidia-", "nvidia-dkms-")):
+            return True
+        return UbuntuDrivers.detect.NvidiaPkgNameInfo(package_name).is_valid
+
+    if not UbuntuDrivers.detect.is_lxc_container():
+        return to_install, None
+
+    has_nvidia = any(_is_nvidia_candidate(package_name) for package_name in to_install)
+    if not has_nvidia:
+        return to_install, None
+
+    host_major = UbuntuDrivers.detect.get_host_nvidia_kernel_module_major_version()
+    if host_major is None:
+        return (
+            [],
+            "No NVIDIA kernel modules were detected on the host from this LXC "
+            "container. Run 'sudo ubuntu-drivers install' on the host and retry.",
+        )
+
+    if gpgpu:
+        all_packages = UbuntuDrivers.detect.system_gpgpu_driver_packages(
+            apt_cache, sys_path
+        )
+        constrained_packages = (
+            UbuntuDrivers.detect.filter_nvidia_packages_by_major_version(
+                all_packages,
+                host_major,
+            )
+        )
+        nvidia_install = UbuntuDrivers.detect.gpgpu_install_filter(
+            apt_cache,
+            False,
+            constrained_packages,
+            args.driver_string,
+            get_recommended=False,
+            gpgpu=True,
+        )
+    else:
+        all_packages = UbuntuDrivers.detect.system_driver_packages(
+            apt_cache,
+            sys_path,
+            freeonly=args.free_only,
+            include_oem=args.install_oem_meta,
+        )
+        constrained_packages = (
+            UbuntuDrivers.detect.filter_nvidia_packages_by_major_version(
+                all_packages,
+                host_major,
+            )
+        )
+        nvidia_install = UbuntuDrivers.detect.auto_install_filter(
+            apt_cache,
+            False,
+            constrained_packages,
+            args.driver_string,
+            get_recommended=False,
+        )
+
+    nvidia_install = UbuntuDrivers.detect.filter_nvidia_userspace_packages_for_lxc(
+        UbuntuDrivers.detect.expand_nvidia_userspace_packages_for_lxc(
+            apt_cache,
+            nvidia_install,
+            host_major,
+        ),
+        host_major,
+    )
+
+    required_forbidden_packages = (
+        UbuntuDrivers.detect.packages_require_lxc_excluded_nvidia_dependencies(
+            apt_cache,
+            nvidia_install,
+            host_major,
+        )
+    )
+    if required_forbidden_packages:
+        return (
+            [],
+            "The NVIDIA userspace packages matching host branch %s still require "
+            "kernel-side packages in this container (%s). Run 'sudo ubuntu-drivers "
+            "install' on the host or attach the GPU devices directly to the container."
+            % (host_major, ", ".join(required_forbidden_packages)),
+        )
+
+    non_nvidia = [p for p in to_install if "nvidia" not in p]
+    final_install = non_nvidia + [p for p in nvidia_install if p not in non_nvidia]
+
+    has_matching_nvidia = any(
+        UbuntuDrivers.detect.get_nvidia_package_major_version(package_name)
+        == host_major
+        for package_name in final_install
+    )
+    if not has_matching_nvidia:
+        return (
+            [],
+            "No userspace NVIDIA packages matching the host module major version "
+            "(%s) were found in this container. Run 'sudo ubuntu-drivers install' "
+            "on the host and retry." % host_major,
+        )
+
+    return final_install, None
 
 
 def command_list(args: Config) -> int:
@@ -222,7 +333,6 @@ def command_install(args: Config) -> Optional[int]:
         print(ex)
         return 1
 
-    with_nvidia_kms = False
     is_nvidia = False
 
     # First check if kernel needs updating
@@ -241,6 +351,13 @@ def command_install(args: Config) -> Optional[int]:
         driver_string=args.driver_string,
         include_dkms=args.include_dkms,
     )
+
+    to_install, lxc_error = _apply_lxc_nvidia_package_policy(
+        cache, args, to_install, gpgpu=False
+    )
+    if lxc_error:
+        print(lxc_error, file=sys.stderr)
+        return 1
 
     if not to_install:
         print("All the available drivers are already installed.")
@@ -339,6 +456,14 @@ def install_gpgpu(args: Config) -> int:
     to_install = UbuntuDrivers.detect.gpgpu_install_filter(
         cache, args.include_dkms, packages, args.driver_string, get_recommended=False
     )
+
+    to_install, lxc_error = _apply_lxc_nvidia_package_policy(
+        cache, args, to_install, gpgpu=True
+    )
+    if lxc_error:
+        print(lxc_error, file=sys.stderr)
+        return 1
+
     if not to_install:
         print("No drivers found for installation.")
         return not_found_exit_status

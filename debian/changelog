@@ -1,3 +1,9 @@
+ubuntu-drivers-common (1:0.10.9ubuntu2) resolute; urgency=medium
+
+  * Add proper lxc container install handling
+
+ -- Mitchell Augustin <mitchell.augustin@canonical.com>  Wed, 05 Aug 2026 09:26:17 -0500
+
 ubuntu-drivers-common (1:0.10.9) resolute; urgency=medium
 
   [ Mitchell Augustin ]
